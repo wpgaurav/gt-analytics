@@ -9,8 +9,8 @@ import {
 
 import SiteForm from "~/components/SiteForm";
 import { requireAuth } from "~/lib/auth";
-import { getSite, upsertSite, validateSiteInput } from "~/content/sites";
-import { formToSiteInput } from "~/content/site-form";
+import { getSite, upsertSite, validateSiteInput } from "~/sites/sites";
+import { formToSiteInput } from "~/sites/site-form";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
     await requireAuth(request, context.cloudflare.env);
@@ -20,7 +20,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 export async function action({ context, request }: ActionFunctionArgs) {
     await requireAuth(request, context.cloudflare.env);
 
-    const db = context.cloudflare.env.CONTENT_DB;
+    const db: D1Database = context.cloudflare.env.SITES_DB;
     const form = await request.formData();
     const { input, values } = formToSiteInput(form);
 
@@ -37,7 +37,9 @@ export async function action({ context, request }: ActionFunctionArgs) {
     }
 
     await upsertSite(db, input);
-    return redirect(`/admin/sites/${encodeURIComponent(input.site_id)}?created=1`);
+    return redirect(
+        `/admin/sites/${encodeURIComponent(input.site_id)}?created=1`,
+    );
 }
 
 export default function NewSite() {
@@ -54,8 +56,8 @@ export default function NewSite() {
                     <h1>Add a site</h1>
                     <p>
                         Tracking starts as soon as the snippet is installed.
-                        Adding the site here is what lets recorded paths resolve
-                        to WordPress posts.
+                        Adding the site here names it in the dashboard and makes
+                        its recorded paths link back to the live page.
                     </p>
                 </div>
             </header>

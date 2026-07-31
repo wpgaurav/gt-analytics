@@ -1,6 +1,6 @@
 import { Form, Link } from "react-router";
 
-import type { Site } from "~/content/sites";
+import type { Site } from "~/sites/sites";
 
 export interface SiteFormProps {
     /** Existing site when editing; omitted when creating. */
@@ -28,17 +28,18 @@ export default function SiteForm({
     const value = (name: keyof Site, fallback = "") =>
         values[name] ?? (site?.[name] as string | null) ?? fallback;
 
-    const checked = (name: "enabled" | "wp_sync_enabled") => {
-        if (values[name] !== undefined) return values[name] === "on";
-        if (site) return site[name] === 1;
-        return true;
-    };
+    const enabled =
+        values.enabled !== undefined
+            ? values.enabled === "on"
+            : site
+              ? site.enabled === 1
+              : true;
 
     return (
         <Form method="post" className="stack-md">
             <div className="card">
                 <div className="card-head">
-                    <h2>Identity</h2>
+                    <h2>Site</h2>
                 </div>
                 <div className="card-body">
                     <div className="field">
@@ -81,94 +82,26 @@ export default function SiteForm({
                         )}
                     </div>
 
-                    <div className="field-check">
-                        <input
-                            id="enabled"
-                            name="enabled"
-                            type="checkbox"
-                            defaultChecked={checked("enabled")}
-                        />
-                        <label htmlFor="enabled">
-                            Enabled
-                            <span className="field-hint">
-                                Turning this off stops scheduled syncing and
-                                post-ID enrichment. Pageviews are still
-                                recorded, and nothing already stored is lost.
-                            </span>
-                        </label>
-                    </div>
-                </div>
-            </div>
-
-            <div className="card">
-                <div className="card-head">
-                    <h2>WordPress</h2>
-                </div>
-                <div className="card-body">
-                    <div className="field-check">
-                        <input
-                            id="wp_sync_enabled"
-                            name="wp_sync_enabled"
-                            type="checkbox"
-                            defaultChecked={checked("wp_sync_enabled")}
-                        />
-                        <label htmlFor="wp_sync_enabled">
-                            Sync content from WordPress
-                            <span className="field-hint">
-                                Reads the public REST API hourly to map URL
-                                paths to post IDs. No plugin and no credentials
-                                are needed. Turn this off for non-WordPress
-                                properties, which still get path analytics.
-                            </span>
-                        </label>
-                    </div>
-
-                    <div className="field">
-                        <label htmlFor="wp_base_url">Site URL</label>
-                        <input
-                            id="wp_base_url"
-                            name="wp_base_url"
-                            type="url"
-                            className="input"
-                            defaultValue={value("wp_base_url")}
-                            aria-invalid={errors.wp_base_url ? true : undefined}
-                            aria-describedby="wp_base_url-hint"
-                            placeholder="https://gauravtiwari.org"
-                        />
-                        <span className="field-hint" id="wp_base_url-hint">
-                            No trailing slash. The REST API is read at{" "}
-                            <span className="mono">/wp-json/wp/v2/</span>.
-                        </span>
-                        {errors.wp_base_url && (
-                            <span className="field-error">
-                                {errors.wp_base_url}
-                            </span>
-                        )}
-                    </div>
-
                     <div className="field-row field-row--2">
                         <div className="field">
-                            <label htmlFor="wp_admin_url">
-                                Admin URL (optional)
-                            </label>
+                            <label htmlFor="base_url">Site URL</label>
                             <input
-                                id="wp_admin_url"
-                                name="wp_admin_url"
+                                id="base_url"
+                                name="base_url"
                                 type="url"
                                 className="input"
-                                defaultValue={value("wp_admin_url")}
-                                aria-invalid={
-                                    errors.wp_admin_url ? true : undefined
-                                }
-                                placeholder="https://gauravtiwari.org/wp-admin"
+                                defaultValue={value("base_url")}
+                                aria-invalid={errors.base_url ? true : undefined}
+                                aria-describedby="base_url-hint"
+                                placeholder="https://gauravtiwari.org"
                             />
-                            <span className="field-hint">
-                                Used for edit links in reports. Defaults to the
-                                site URL plus /wp-admin.
+                            <span className="field-hint" id="base_url-hint">
+                                Optional. Recorded paths become clickable links
+                                against this origin. No trailing slash.
                             </span>
-                            {errors.wp_admin_url && (
+                            {errors.base_url && (
                                 <span className="field-error">
-                                    {errors.wp_admin_url}
+                                    {errors.base_url}
                                 </span>
                             )}
                         </div>
@@ -188,6 +121,23 @@ export default function SiteForm({
                                 days in reports.
                             </span>
                         </div>
+                    </div>
+
+                    <div className="field-check">
+                        <input
+                            id="enabled"
+                            name="enabled"
+                            type="checkbox"
+                            defaultChecked={enabled}
+                        />
+                        <label htmlFor="enabled">
+                            Enabled
+                            <span className="field-hint">
+                                Turning this off hides the site from the
+                                dashboard picker. Hits are still recorded and
+                                nothing already stored is lost.
+                            </span>
+                        </label>
                     </div>
                 </div>
             </div>

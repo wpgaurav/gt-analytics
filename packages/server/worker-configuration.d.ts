@@ -19,10 +19,8 @@ declare namespace Cloudflare {
 		DAILY_ROLLUPS: R2Bucket;
 		WEB_COUNTER_AE: AnalyticsEngineDataset;
 		ASSETS: Fetcher;
-		/** Content map: sites, WordPress objects, taxonomy, sync cursors. */
-		CONTENT_DB: D1Database;
-		/** Edge projection of the content map, keyed `map:<siteId>`. */
-		CONTENT_MAP: KVNamespace;
+		/** Tracked sites: id, label, base URL used to build report links. */
+		SITES_DB: D1Database;
 	}
 }
 interface Env extends Cloudflare.Env {}

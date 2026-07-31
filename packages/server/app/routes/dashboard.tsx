@@ -30,6 +30,7 @@ import SearchFilterBadges from "~/components/SearchFilterBadges";
 import { TimeSeriesCard } from "./resources.timeseries";
 import { StatsCard } from "./resources.stats";
 import { requireAuth } from "~/lib/auth";
+import { listSiteUrls } from "~/sites/sites";
 
 export const meta: MetaFunction = () => {
     return [
@@ -96,20 +97,12 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
     // Base URLs come from the managed sites table, so a recorded path can be
     // turned back into a clickable link on the live site.
-    const siteUrls: Record<string, string> = {};
+    let siteUrls: Record<string, string> = {};
     try {
-        const db: D1Database = context.cloudflare.env.CONTENT_DB;
-        const { results } = await db
-            .prepare(`SELECT site_id, wp_base_url FROM sites`)
-            .all();
-        for (const row of results ?? []) {
-            const id = String((row as Record<string, unknown>).site_id ?? "");
-            const base = (row as Record<string, unknown>).wp_base_url;
-            if (id && base) siteUrls[id] = String(base);
-        }
+        siteUrls = await listSiteUrls(context.cloudflare.env.SITES_DB);
     } catch (err) {
-        // A missing or unreachable content database must not take the
-        // dashboard down -- links simply degrade to plain text.
+        // A missing or unreachable sites database must not take the dashboard
+        // down -- links simply degrade to plain text.
         console.error("could not load site base URLs", err);
     }
 
