@@ -65,8 +65,13 @@ export async function action({ context, request }: ActionFunctionArgs) {
                     `Sync finished with errors. ${failed}`.trim(),
             };
         }
+        const skipped = result.types.reduce((n, t) => n + t.skipped, 0);
         return {
-            notice: `Synced ${siteId}: ${result.totalWritten} items across ${result.types.length} post types, ${result.mapEntries} paths mapped.`,
+            notice:
+                `Synced ${siteId}: ${result.totalWritten} items across ${result.types.length} post types, ${result.mapEntries} paths mapped.` +
+                (skipped
+                    ? ` ${skipped} skipped — no addressable URL (query-string permalinks).`
+                    : ""),
         };
     }
 

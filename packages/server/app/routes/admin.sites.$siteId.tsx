@@ -88,8 +88,13 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
                 .join("; ");
             return { error: result.error || detail || "Sync failed." };
         }
+        const skipped = result.types.reduce((n, t) => n + t.skipped, 0);
         return {
-            notice: `Synced ${result.totalWritten} items across ${result.types.length} post types. ${result.mapEntries} paths mapped.`,
+            notice:
+                `Synced ${result.totalWritten} items across ${result.types.length} post types. ${result.mapEntries} paths mapped.` +
+                (skipped
+                    ? ` ${skipped} skipped — no addressable URL (query-string permalinks).`
+                    : ""),
         };
     }
 

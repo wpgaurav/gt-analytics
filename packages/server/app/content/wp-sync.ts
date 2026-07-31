@@ -10,7 +10,7 @@
  * admin UI rather than a deploy on the WordPress box.
  */
 
-import { normalizePath } from "./paths";
+import { isNonContentPath, normalizePath } from "./paths";
 import type { Site } from "./sites";
 
 /** WordPress objects we never want in the content map. */
@@ -41,6 +41,8 @@ export interface TypeSyncResult {
     restBase: string;
     seen: number;
     written: number;
+    /** Objects with no addressable URL path, e.g. a ?type=slug permalink. */
+    skipped: number;
     status: "ok" | "error";
     error?: string;
 }
@@ -118,9 +120,9 @@ export async function discoverPostTypes(baseUrl: string): Promise<WpType[]> {
 /**
  * Syncs one post type, resuming from the stored cursor.
  *
- * Ordering by `modified` ascending is what makes this resumable: the cursor is
- * the last modified date successfully written, so an interrupted run picks up
- * where it stopped instead of restarting.
+ * Resumable via a `modified_after` cursor; paged by `id` for a stable order.
+ * The cursor is the newest modified date written, so an interrupted run picks
+ * up where it stopped instead of restarting.
  */
 async function syncType(
     db: D1Database,
@@ -132,6 +134,7 @@ async function syncType(
         restBase: type.rest_base,
         seen: 0,
         written: 0,
+        skipped: 0,
         status: "ok",
     };
 
@@ -157,7 +160,18 @@ async function syncType(
             const params = new URLSearchParams({
                 per_page: String(PAGE_SIZE),
                 page: String(page),
-                orderby: "modified",
+                // Order by id, not modified.
+                //
+                // Offset pagination needs a *unique* sort key. Ordering by
+                // `modified` puts many rows on the same second, so their
+                // relative order is undefined and items drift across page
+                // boundaries between requests -- some returned twice, some
+                // never. That cost 3-5 objects per post type, silently.
+                // `id` is unique and immutable, so page N is stable.
+                //
+                // Incremental syncing is unaffected: `modified_after` is a
+                // filter, independent of the sort.
+                orderby: "id",
                 order: "asc",
                 _fields:
                     "id,slug,link,type,status,date_gmt,modified_gmt,author,categories,tags,title",
@@ -180,7 +194,14 @@ async function syncType(
             if (!Array.isArray(items) || items.length === 0) break;
 
             result.seen += items.length;
-            result.written += await writeItems(db, site, type.slug, items);
+            const { written, skipped } = await writeItems(
+                db,
+                site,
+                type.slug,
+                items,
+            );
+            result.written += written;
+            result.skipped += skipped;
 
             // Ordered ascending, so the last item of the last page carries the
             // newest modified date. Tracked here, written once the run ends.
@@ -241,14 +262,29 @@ async function writeItems(
     site: Site,
     postType: string,
     items: WpItem[],
-): Promise<number> {
+): Promise<{ written: number; skipped: number }> {
     const statements: D1PreparedStatement[] = [];
+
+    let skipped = 0;
 
     for (const item of items) {
         if (!item?.id) continue;
 
         const permalink = item.link ?? null;
         const path = normalizePath(permalink ?? `/${item.slug ?? ""}/`);
+
+        // Some post types have no pretty permalink -- their `link` is a query
+        // string, e.g. https://site/?testimonial=slug. Stripping the query
+        // leaves "/" for every one of them, so without this they collide with
+        // each other and evict whatever legitimately owns the site root.
+        //
+        // Such objects have no addressable path, so they cannot be attributed
+        // by path regardless. Skipping is the honest outcome: their pageviews
+        // are still counted, just not tied to a post.
+        if (isNonContentPath(path)) {
+            skipped++;
+            continue;
+        }
         const published = item.date_gmt ?? item.date ?? null;
         const year = published ? Number(published.slice(0, 4)) : null;
         const primaryTerm = item.categories?.length ? item.categories[0] : null;
@@ -265,9 +301,16 @@ async function writeItems(
                 .bind(site.site_id, item.id, path),
         );
 
-        // A different post may already hold this path (the previous occupant
-        // was deleted and the slug reused). The unique index on (site_id, path)
-        // would reject the insert, so clear the stale holder first.
+        // A different object may already hold this path -- either the previous
+        // occupant was deleted and the slug reused, or WordPress genuinely has
+        // two objects claiming one URL (a post and a page with the same slug,
+        // usually from an import or a slug edit; WordPress itself can only
+        // serve one of them).
+        //
+        // The unique index on (site_id, path) forbids both, so the stale
+        // holder is cleared first and the later writer wins. Post types are
+        // discovered in a stable order, so this is deterministic run to run.
+        // One URL maps to one object, which is what the collector needs.
         statements.push(
             db
                 .prepare(
@@ -332,14 +375,15 @@ async function writeItems(
         }
     }
 
-    if (statements.length === 0) return 0;
-
     // D1 batches are capped; chunk so a large page cannot exceed the limit.
     for (let i = 0; i < statements.length; i += 100) {
         await db.batch(statements.slice(i, i + 100));
     }
 
-    return items.length;
+    // Report what was actually mapped, not what was fetched, so a site whose
+    // counts look short can be traced to unaddressable objects rather than to
+    // a pagination fault.
+    return { written: items.length - skipped, skipped };
 }
 
 /**
