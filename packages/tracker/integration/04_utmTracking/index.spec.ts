@@ -21,7 +21,9 @@ test("tracks UTM parameters when present in URL", async ({ page }) => {
     expect(params.get("sid")).toBe("utm-test-site-id");
     expect(params.get("h")).toBe("http://localhost");
     expect(params.get("p")).toBe("/04_utmTracking/");
-    expect(params.get("r")).toBe("google"); // utm_source is now used as referrer
+    // A campaign source is not a referring page. It is asserted as `us`
+    // below; recording it here produced referrer values that were not URLs.
+    expect(params.get("r")).toBe("");
 
     expect(params.get("us")).toBe("google"); // utm_source
     expect(params.get("um")).toBe("cpc"); // utm_medium

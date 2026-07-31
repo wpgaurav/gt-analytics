@@ -52,15 +52,15 @@ function getBrowserReferrer(hostname: string, referrer: string): string {
         return getReferrer(hostname, document.referrer);
     }
 
-    // If still no referrer, check query parameters
+    // If still no referrer, check query parameters that explicitly name one.
+    //
+    // utm_source and `source` used to be in this list, which conflated a
+    // campaign source with a referrer: a link tagged ?utm_source=chatgpt.com
+    // recorded "chatgpt.com" as the referrer -- not a URL, so it could not be
+    // linked to and polluted the referrer report. The campaign source has its
+    // own column; it does not belong here.
     const urlParams = new URLSearchParams(window.location.search);
-    const referrerParams = [
-        "ref",
-        "referer",
-        "referrer",
-        "source",
-        "utm_source",
-    ];
+    const referrerParams = ["ref", "referer", "referrer"];
 
     for (const param of referrerParams) {
         const value = urlParams.get(param);
@@ -96,7 +96,19 @@ export async function trackPageview(
 
     const { hostname, path } = getHostnameAndPath(url, true);
     const referrer = getBrowserReferrer(hostname, opts.referrer || "");
-    const utmParams = getUtmParamsFromBrowserUrl(url);
+
+    // Campaign parameters come from the address bar, never from the canonical.
+    //
+    // `location` above is the canonical link when the page declares one, which
+    // every WordPress page with an SEO plugin does -- and a canonical URL
+    // deliberately omits the query string. Reading UTM from it silently
+    // dropped all five parameters on exactly the pages that matter, so a
+    // tagged campaign link recorded no campaign at all.
+    //
+    // An explicit opts.url still wins: a caller passing a URL means it.
+    const utmParams = getUtmParamsFromBrowserUrl(
+        opts.url || window.location.search,
+    );
 
     let hitType: string | undefined;
     try {

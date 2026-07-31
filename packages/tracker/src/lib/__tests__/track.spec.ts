@@ -254,6 +254,45 @@ describe("trackPageview", () => {
     });
 
     describe("UTM parameter tracking", () => {
+        test("reads UTM from the address bar even when a canonical exists", async () => {
+            // The bug this exists for: `location` falls back to the canonical
+            // link when the page declares one, and a canonical URL omits the
+            // query string by design. Every WordPress page with an SEO plugin
+            // has one, so a tagged campaign link recorded no campaign at all.
+            //
+            // The suite's beforeEach stubs querySelector to return null, which
+            // is why no existing test covered this path -- override it here.
+            vi.spyOn(document, "querySelector").mockReturnValue({
+                href: "https://example.com/test-path/",
+            } as unknown as Element);
+
+            Object.defineProperty(window, "location", {
+                writable: true,
+                value: {
+                    pathname: "/test-path/",
+                    search: "?utm_source=newsletter&utm_medium=email&utm_campaign=july",
+                    host: "example.com",
+                },
+            });
+
+            const client = new Client({
+                siteId: "test-site",
+                reporterUrl: "https://example.com/collect",
+                autoTrackPageviews: false,
+            });
+
+            await trackPageview(client);
+
+            expect(makeRequestMock).toHaveBeenCalledWith(
+                "https://example.com/collect",
+                expect.objectContaining({
+                    us: "newsletter",
+                    um: "email",
+                    uc: "july",
+                }),
+            );
+        });
+
         test("should include UTM parameters when present in URL", async () => {
             // Mock location with UTM parameters
             Object.defineProperty(window, "location", {
@@ -279,7 +318,9 @@ describe("trackPageview", () => {
                 expect.objectContaining({
                     p: "/test-path",
                     h: "http://localhost",
-                    r: "google",
+                    // A campaign source is not a referrer. It is carried in
+                    // `us` below, not here.
+                    r: "",
                     sid: "test-site",
                     ht: "1",
                     us: "google",
@@ -511,13 +552,16 @@ describe("trackPageview", () => {
             );
         });
 
-        test("should use source parameter when document.referrer is missing", async () => {
-            // Mock location with source parameter
+        test("should not treat source as a referrer", async () => {
+            // source names a campaign, not a referring page. Recording it as
+            // the referrer produced values that were not URLs -- "chatgpt.com"
+            // rather than "https://chatgpt.com/" -- which could not be linked
+            // to and polluted the referrer report.
             Object.defineProperty(window, "location", {
                 writable: true,
                 value: {
                     pathname: "/test-path",
-                    search: "?source=external-site.com",
+                    search: "?source=chatgpt.com",
                     host: "example.com",
                 },
             });
@@ -530,22 +574,22 @@ describe("trackPageview", () => {
 
             await trackPageview(client);
 
-            expect(makeRequestMock).toHaveBeenCalledTimes(1);
             expect(makeRequestMock).toHaveBeenCalledWith(
                 "https://example.com/collect",
-                expect.objectContaining({
-                    r: "external-site.com",
-                }),
+                expect.objectContaining({ r: "" }),
             );
         });
 
-        test("should use utm_source parameter when document.referrer is missing", async () => {
-            // Mock location with utm_source parameter
+        test("should not treat utm_source as a referrer", async () => {
+            // utm_source names a campaign, not a referring page. Recording it as
+            // the referrer produced values that were not URLs -- "chatgpt.com"
+            // rather than "https://chatgpt.com/" -- which could not be linked
+            // to and polluted the referrer report.
             Object.defineProperty(window, "location", {
                 writable: true,
                 value: {
                     pathname: "/test-path",
-                    search: "?utm_source=external-site.com",
+                    search: "?utm_source=chatgpt.com",
                     host: "example.com",
                 },
             });
@@ -558,12 +602,9 @@ describe("trackPageview", () => {
 
             await trackPageview(client);
 
-            expect(makeRequestMock).toHaveBeenCalledTimes(1);
             expect(makeRequestMock).toHaveBeenCalledWith(
                 "https://example.com/collect",
-                expect.objectContaining({
-                    r: "external-site.com",
-                }),
+                expect.objectContaining({ r: "" }),
             );
         });
 
