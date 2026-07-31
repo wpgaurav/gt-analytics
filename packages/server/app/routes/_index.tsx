@@ -84,7 +84,6 @@ export default function Index() {
                                     name="password"
                                     className="input"
                                     required
-                                    autoFocus
                                     autoComplete="current-password"
                                     disabled={isSubmitting}
                                     aria-invalid={
