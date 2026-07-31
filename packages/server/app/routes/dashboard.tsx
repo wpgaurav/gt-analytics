@@ -237,11 +237,6 @@ export default function Dashboard() {
     // into something clickable. Sites without one (non-WordPress properties)
     // simply render as text.
     const siteBase = data.siteUrls?.[data.siteId];
-    const pathLinkBuilder = siteBase
-        ? (path: string) =>
-              path.startsWith("/") ? `${siteBase}${path}` : null
-        : undefined;
-
     const cardProps = {
         siteId: data.siteId,
         interval: data.interval,
