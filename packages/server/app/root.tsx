@@ -10,6 +10,7 @@ import {
     useLoaderData,
 } from "react-router";
 import { getUser, isAuthEnabled } from "~/lib/auth";
+import Logo from "~/components/Logo";
 import Sidebar from "~/components/Sidebar";
 import { listPresets } from "~/sites/presets";
 import { readPreferredSite } from "~/lib/site-preference";
@@ -97,7 +98,10 @@ export const Layout = ({ children = [] }: { children: React.ReactNode }) => {
                     name="viewport"
                     content="width=device-width, initial-scale=1"
                 />
-                <link rel="icon" type="image/x-icon" href="/favicon.png" />
+                {/* SVG first for crisp scaling; the PNG stays as the
+                    fallback for browsers that ignore SVG favicons. */}
+                <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+                <link rel="alternate icon" type="image/png" href="/favicon.png" />
                 <meta name="robots" content="noindex" />
                 <title>GT Analytics</title>
                 <Meta />
@@ -126,6 +130,7 @@ export default function App() {
             <nav className="nav">
                 <div className="container nav-inner">
                     <a className="nav-brand" href="/dashboard">
+                        <Logo size={22} />
                         <span>GT Analytics</span>
                     </a>
                     <div className="nav-cta">

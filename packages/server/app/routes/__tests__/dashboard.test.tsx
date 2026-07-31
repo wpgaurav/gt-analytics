@@ -399,11 +399,23 @@ describe("Dashboard route", () => {
                     {
                         path: "/resources/referrer",
                         loader: () => {
+                            // Referrers are grouped by source now, so the card
+                            // shows the display name rather than the hostname.
                             return {
-                                countsByProperty: [
-                                    ["google.com", 100],
-                                    ["facebook.com", 80],
-                                    ["twitter.com", 60],
+                                groups: [
+                                    {
+                                        host: "google.com",
+                                        name: "Google",
+                                        views: 100,
+                                        visitors: 60,
+                                        urls: [
+                                            {
+                                                url: "https://google.com/",
+                                                views: 100,
+                                                visitors: 60,
+                                            },
+                                        ],
+                                    },
                                 ],
                             };
                         },
@@ -510,7 +522,7 @@ describe("Dashboard route", () => {
 
         expect(screen.getByText("/about")).toBeInTheDocument();
         expect(screen.getByText("Chrome")).toBeInTheDocument();
-        expect(screen.getByText("google.com")).toBeInTheDocument();
+        expect(screen.getByText("Google")).toBeInTheDocument();
         expect(screen.getByText("Canada")).toBeInTheDocument(); // assert converted CA -> Canada
         expect(screen.getByText("Mobile")).toBeInTheDocument();
     });

@@ -46,6 +46,18 @@ function accumulateCountsFromRowResult(
     counts.views += Number(row.count);
 }
 
+/** Best-effort hostname for rows recorded before blob16 existed. */
+function hostFromUrl(url: string): string {
+    if (!url) return "";
+    try {
+        return new URL(url.includes("://") ? url : `https://${url}`).hostname
+            .toLowerCase()
+            .replace(/^www\./, "");
+    } catch {
+        return "";
+    }
+}
+
 export function intervalToSql(
     interval: string,
     tz?: string,
@@ -720,11 +732,121 @@ export class AnalyticsEngineAPI {
             page,
         );
 
-        return Object.entries(allCounts).map(([key, counts]) => [
-            key || "direct",
-            counts.visitors,
-            counts.views,
-        ]);
+        // Rows recorded before attribution shipped have an empty channel.
+        // Mapping "" to "direct" at display time left two rows both labelled
+        // Direct with separate counts; merge them here instead.
+        const merged = new Map<string, { visitors: number; views: number }>();
+        for (const [key, counts] of Object.entries(allCounts)) {
+            const channel = key || "direct";
+            const existing = merged.get(channel) ?? { visitors: 0, views: 0 };
+            existing.visitors += counts.visitors;
+            existing.views += counts.views;
+            merged.set(channel, existing);
+        }
+
+        return [...merged.entries()]
+            .map(
+                ([channel, counts]) =>
+                    [channel, counts.visitors, counts.views] as [
+                        string,
+                        number,
+                        number,
+                    ],
+            )
+            .sort((a, b) => b[1] - a[1]);
+    }
+
+    /**
+     * Referrers grouped by source host, each carrying the exact URLs beneath.
+     *
+     * One query returns both levels: grouping in SQL and nesting in JS avoids
+     * the N+1 that a per-host drill-down query would cost, and means the
+     * parent count is always the true sum of its children rather than a
+     * separately-computed number that can disagree with them.
+     *
+     * blob16 (referrerHost) is empty for rows recorded before attribution
+     * shipped, so the host falls back to being derived from the raw URL.
+     */
+    async getReferrersGrouped(
+        siteId: string,
+        interval: string,
+        tz?: string,
+        filters: SearchFilters = {},
+        limit = 200,
+    ): Promise<
+        {
+            host: string;
+            views: number;
+            visitors: number;
+            urls: { url: string; views: number; visitors: number }[];
+        }[]
+    > {
+        const { startIntervalSql, endIntervalSql } = intervalToSql(interval, tz);
+        const filterStr = filtersToSql(filters);
+
+        const query = `
+            SELECT ${ColumnMappings.referrerHost} AS host,
+                   ${ColumnMappings.referrer} AS url,
+                   SUM(_sample_interval) AS views,
+                   SUM(_sample_interval * ${ColumnMappings.newVisitor}) AS visitors
+            FROM ${this.dataset}
+            WHERE timestamp >= ${startIntervalSql}
+              AND timestamp < ${endIntervalSql}
+              AND ${ColumnMappings.siteId} = '${siteId}'
+              ${filterStr}
+            GROUP BY host, url
+            ORDER BY views DESC
+            LIMIT ${limit}
+        `;
+
+        const response = await this.query(query);
+        if (!response.ok) return [];
+
+        const body = (await response.json()) as {
+            data?: {
+                host: string;
+                url: string;
+                views: string;
+                visitors: string;
+            }[];
+        };
+
+        const groups = new Map<
+            string,
+            {
+                host: string;
+                views: number;
+                visitors: number;
+                urls: { url: string; views: number; visitors: number }[];
+            }
+        >();
+
+        for (const row of body.data ?? []) {
+            const url = row.url || "";
+            const host = row.host || hostFromUrl(url);
+
+            // A hit with neither is direct traffic, which is not a referral.
+            if (!host && !url) continue;
+
+            const views = Number(row.views) || 0;
+            const visitors = Number(row.visitors) || 0;
+
+            let group = groups.get(host);
+            if (!group) {
+                group = { host, views: 0, visitors: 0, urls: [] };
+                groups.set(host, group);
+            }
+
+            group.views += views;
+            group.visitors += visitors;
+            if (url) group.urls.push({ url, views, visitors });
+        }
+
+        for (const group of groups.values()) {
+            group.urls.sort((a, b) => b.views - a.views);
+        }
+
+        return [...groups.values()].sort((a, b) => b.views - a.views);
     }
 
     /** Traffic by normalised source hostname, rather than raw referrer URL. */

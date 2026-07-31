@@ -20,6 +20,12 @@
    ========================================================================= */
 
 :root {
+    /* Wider than the CFDS default of 1180px.
+       Overridden here rather than edited in core-forms.css: that file is
+       vendored verbatim from the design system repo, and patching it would
+       have to be redone by hand on every update. */
+    --container: 1600px;
+
     /* CFDS has no spacing scale. These are the only additions, kept small
        and named so they read as a system rather than magic numbers. */
     --gap-xs: 6px;
@@ -339,6 +345,12 @@
 
 .nav .nav-links a.is-active .icon {
     color: var(--brand-500);
+}
+
+/* The mark picks up the brand colour; the wordmark stays ink. */
+.nav-brand .logo {
+    color: var(--brand-500);
+    flex: none;
 }
 
 .icon--inline {
@@ -879,6 +891,93 @@
 
 .row-label__open:hover {
     color: var(--brand-600);
+}
+
+/* Grouped referrer source, expandable to its exact URLs. */
+.source__summary {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-xs);
+    cursor: pointer;
+    list-style: none;
+    padding-block: 2px;
+}
+
+.source__summary::-webkit-details-marker {
+    display: none;
+}
+
+.source__caret {
+    inline-size: 0;
+    block-size: 0;
+    flex: none;
+    border-inline-start: 4px solid var(--ink-400);
+    border-block: 3.5px solid transparent;
+    transition: transform var(--t-fast);
+}
+
+.source[open] .source__caret {
+    transform: rotate(90deg);
+}
+
+.source__summary:hover .source__caret {
+    border-inline-start-color: var(--brand-500);
+}
+
+.source__name {
+    font-weight: 550;
+    color: var(--ink-800);
+}
+
+.source__summary:hover .source__name {
+    color: var(--brand-600);
+}
+
+.source__count {
+    font-size: 0.72rem;
+    color: var(--ink-400);
+    white-space: nowrap;
+}
+
+.source__urls {
+    margin: var(--gap-xs) 0 var(--gap-xs);
+    /* Indent to the caret, so children read as belonging to the source. */
+    padding-inline-start: calc(var(--gap-xs) + 18px);
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.source__urls li {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--gap-sm);
+    font-size: 0.8rem;
+}
+
+.source__url {
+    color: var(--ink-600);
+    text-decoration: none;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.source__url:hover {
+    color: var(--brand-600);
+    text-decoration: underline;
+}
+
+.source__url-count {
+    flex: none;
+    color: var(--ink-400);
+    font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .source__caret { transition: none; }
 }
 
 /* Loading cards dim rather than collapse, so the layout does not jump. */
