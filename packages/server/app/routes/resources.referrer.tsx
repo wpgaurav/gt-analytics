@@ -7,7 +7,7 @@ import { paramsFromUrl, getFiltersFromSearchParams } from "~/lib/utils";
 import { SearchFilters } from "~/lib/types";
 import { requireApiAuth } from "~/lib/api-auth";
 import Icon from "~/components/Icon";
-import { displayUrl, sourceName } from "~/lib/sources";
+import { absoluteUrl, displayUrl, sourceName } from "~/lib/sources";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
     await requireApiAuth(request, context.cloudflare.env);
@@ -192,12 +192,13 @@ function SourceCell({
 }) {
     const label = group.name;
     const favicon = `/favicon?url=${encodeURIComponent(
-        group.urls[0]?.url || `https://${group.host}`,
+        absoluteUrl(group.urls[0]?.url) || `https://${group.host}`,
     )}`;
 
     // One URL under a source needs no expander -- it would just restate the
     // row one level down.
     if (group.urls.length <= 1) {
+        const href = absoluteUrl(group.urls[0]?.url);
         return (
             <span className="row-label__content">
                 <Favicon src={favicon} />
@@ -209,13 +210,13 @@ function SourceCell({
                 >
                     {label}
                 </button>
-                {group.urls[0] && (
+                {href && (
                     <a
-                        href={group.urls[0].url}
+                        href={href}
                         target="_blank"
                         rel="noreferrer"
                         className="row-label__open"
-                        aria-label={`Open ${group.urls[0].url}`}
+                        aria-label={`Open ${href}`}
                     >
                         <Icon name="arrow-up-right-from-square" size={12} />
                     </a>
@@ -235,23 +236,32 @@ function SourceCell({
                 </span>
             </summary>
             <ul className="source__urls">
-                {group.urls.map((item) => (
-                    <li key={item.url}>
-                        <a
-                            href={item.url}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="source__url"
-                            title={item.url}
-                        >
-                            {displayUrl(item.url)}
-                        </a>
-                        <span className="source__url-count">
-                            {formatter.format(item.visitors)} /{" "}
-                            {formatter.format(item.views)}
-                        </span>
-                    </li>
-                ))}
+                {group.urls.map((item) => {
+                    const href = absoluteUrl(item.url);
+                    return (
+                        <li key={item.url}>
+                            {href ? (
+                                <a
+                                    href={href}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    className="source__url"
+                                    title={href}
+                                >
+                                    {displayUrl(item.url)}
+                                </a>
+                            ) : (
+                                <span className="source__url" title={item.url}>
+                                    {displayUrl(item.url)}
+                                </span>
+                            )}
+                            <span className="source__url-count">
+                                {formatter.format(item.visitors)} /{" "}
+                                {formatter.format(item.views)}
+                            </span>
+                        </li>
+                    );
+                })}
             </ul>
         </details>
     );

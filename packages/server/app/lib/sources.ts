@@ -126,3 +126,37 @@ export function displayUrl(url: string): string {
     if (!url) return "";
     return url.replace(/^https?:\/\//, "").replace(/\/$/, "") || url;
 }
+
+/**
+ * An absolute, linkable URL for a recorded referrer -- or null when there
+ * isn't one.
+ *
+ * Referrers are not always URLs. When `document.referrer` is empty the tracker
+ * falls back to query parameters, so a ChatGPT link carrying
+ * `?utm_source=chatgpt.com` records the bare string "chatgpt.com". Putting
+ * that straight into an href makes the browser resolve it against the
+ * dashboard's own origin -- which is how "chatgpt.com" became a link to
+ * https://stats.gauravtiwari.org/chatgpt.com.
+ *
+ * Anything that cannot be made into an http(s) URL returns null and is
+ * rendered as plain text rather than a broken link.
+ */
+export function absoluteUrl(value: string | null | undefined): string | null {
+    const raw = (value || "").trim();
+    if (!raw) return null;
+
+    // App referrers are real sources but have nowhere to link to.
+    if (/^android-app:/i.test(raw)) return null;
+
+    const candidate = /^https?:\/\//i.test(raw) ? raw : `https://${raw}`;
+
+    try {
+        const url = new URL(candidate);
+        // A value with no dot in the host is a slug, not a domain -- the
+        // recorded referrer was junk, so do not invent a link to it.
+        if (!url.hostname.includes(".")) return null;
+        return url.toString();
+    } catch {
+        return null;
+    }
+}
