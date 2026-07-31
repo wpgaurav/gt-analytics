@@ -31,12 +31,35 @@ export function getReferrer(hostname: string, referrer: string): string {
         return "";
     }
 
-    // If referrer is from same hostname, don't track it
-    if (referrer.indexOf(hostname) >= 0) {
-        return "";
+    // Compare hostnames, not substrings.
+    //
+    // The old test was `referrer.indexOf(hostname) >= 0`, which drops any
+    // referrer that merely *contains* the site's name -- "notexample.com" and
+    // "example.com.evil.net" were both silently discarded as internal -- while
+    // still counting a subdomain as external. Parse and compare properly.
+    const self = stripWww(hostname);
+    const referrerHostname = stripWww(hostnameOf(referrer));
+
+    if (self && referrerHostname) {
+        if (referrerHostname === self || referrerHostname.endsWith("." + self)) {
+            return "";
+        }
     }
 
     return referrer.split("?")[0] || "";
+}
+
+function hostnameOf(value: string): string {
+    try {
+        return new URL(value.indexOf("://") >= 0 ? value : "https://" + value)
+            .hostname;
+    } catch {
+        return "";
+    }
+}
+
+function stripWww(host: string): string {
+    return (host || "").toLowerCase().replace(/^www\./, "");
 }
 
 export function getUtmParamsFromUrl(url: string): UtmParams {

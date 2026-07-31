@@ -2,6 +2,10 @@ import dayjs from "dayjs";
 import utc from "dayjs/plugin/utc";
 import timezone from "dayjs/plugin/timezone";
 
+// Was duplicated here as a second, local interface that had to be kept in
+// step with the shared one by hand. Importing removes the drift.
+import type { SearchFilters } from "./types";
+
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
@@ -12,20 +16,6 @@ export function paramsFromUrl(url: string) {
         params[key] = value;
     });
     return params;
-}
-
-interface SearchFilters {
-    path?: string;
-    referrer?: string;
-    deviceType?: string;
-    country?: string;
-    browserName?: string;
-    browserVersion?: string;
-    utmSource?: string;
-    utmMedium?: string;
-    utmCampaign?: string;
-    utmTerm?: string;
-    utmContent?: string;
 }
 
 export function getFiltersFromSearchParams(searchParams: URLSearchParams) {
@@ -48,6 +38,12 @@ export function getFiltersFromSearchParams(searchParams: URLSearchParams) {
     }
     if (searchParams.has("browserVersion")) {
         filters.browserVersion = searchParams.get("browserVersion") || "";
+    }
+    if (searchParams.has("channel")) {
+        filters.channel = searchParams.get("channel") || "";
+    }
+    if (searchParams.has("referrerHost")) {
+        filters.referrerHost = searchParams.get("referrerHost") || "";
     }
     if (searchParams.has("utmSource")) {
         filters.utmSource = searchParams.get("utmSource") || "";

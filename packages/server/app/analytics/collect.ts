@@ -1,4 +1,9 @@
 import type { AnalyticsEngineDataset } from "@cloudflare/workers-types";
+import {
+    classifyChannel,
+    detectClickId,
+    referrerHost,
+} from "./referrer";
 import { IDevice, UAParser } from "ua-parser-js";
 import { maskBrowserVersion } from "~/lib/utils";
 
@@ -110,7 +115,7 @@ export function handleCacheHeaders(ifModifiedSince: string | null): {
     };
 }
 
-function extractParamsFromQueryString(requestUrl: string): {
+export function extractParamsFromQueryString(requestUrl: string): {
     [key: string]: string;
 } {
     const url = new URL(requestUrl);
@@ -179,11 +184,36 @@ export function collectRequestHandler(
         parsedUserAgent.getBrowser().version,
     );
 
+    // Referral attribution.
+    //
+    // `sr` is the session's first-touch referrer, remembered by the tracker.
+    // Without it every hit after the landing page looks internal, so a visit
+    // that arrived from Google is credited to Google only once and the rest of
+    // the session silently becomes direct traffic.
+    const immediateReferrer = params.r || "";
+    const sessionReferrer = params.sr || "";
+    const attributedReferrer =
+        referrerHost(immediateReferrer, params.h) !== ""
+            ? immediateReferrer
+            : sessionReferrer || immediateReferrer;
+
+    const clickId = detectClickId(params.ci ? { [params.ci]: "1" } : null);
+    const channel = classifyChannel({
+        referrer: attributedReferrer,
+        selfHost: params.h,
+        utmMedium: params.um,
+        utmSource: params.us,
+        clickId: params.ci,
+    });
+
     const data: DataPoint = {
         siteId,
         host: params.h,
         path: params.p,
         referrer: params.r,
+        referrerHost: referrerHost(attributedReferrer, params.h),
+        channel,
+        clickId: clickId?.name || (params.ci ? params.ci : ""),
         newVisitor: isVisit ? 1 : 0,
         newSession: 0, // dead column
         bounce: bounceValue,
@@ -258,6 +288,9 @@ interface DataPoint {
     utmCampaign?: string;
     utmTerm?: string;
     utmContent?: string;
+    referrerHost?: string;
+    channel?: string;
+    clickId?: string;
 
     // doubles
     newVisitor: number;
@@ -290,6 +323,9 @@ export function writeDataPoint(
             data.utmCampaign || "", // blob13
             data.utmTerm || "", // blob14
             data.utmContent || "", // blob15
+            data.referrerHost || "", // blob16
+            data.channel || "", // blob17
+            data.clickId || "", // blob18
         ],
         doubles: [data.newVisitor || 0, data.newSession || 0, data.bounce],
     };

@@ -8,6 +8,7 @@ export function buildCollectRequestParams(
     referrer: string,
     utmParams: UtmParams = {},
     hitType?: string,
+    attribution: { sessionReferrer?: string; clickId?: string } = {},
 ): CollectRequestParams {
     const params: CollectRequestParams = {
         p: path,
@@ -18,6 +19,16 @@ export function buildCollectRequestParams(
 
     if (hitType) {
         params.ht = hitType;
+    }
+
+    // Only send the session referrer when it adds something the immediate
+    // referrer does not, to keep the pixel URL short.
+    if (attribution.sessionReferrer && attribution.sessionReferrer !== referrer) {
+        params.sr = attribution.sessionReferrer;
+    }
+
+    if (attribution.clickId) {
+        params.ci = attribution.clickId;
     }
 
     Object.assign(params, utmParams);

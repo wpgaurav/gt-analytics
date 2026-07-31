@@ -304,6 +304,18 @@ describe("Dashboard route", () => {
                             return { countsByProperty: [] };
                         },
                     },
+                    {
+                        path: "/resources/channel",
+                        loader: () => {
+                            return { countsByProperty: [] };
+                        },
+                    },
+                    {
+                        path: "/resources/conversions",
+                        loader: () => {
+                            return { rows: [] };
+                        },
+                    },
                 ],
             },
         ]);
@@ -466,6 +478,18 @@ describe("Dashboard route", () => {
                         path: "/resources/utm-content",
                         loader: () => {
                             return { countsByProperty: [] };
+                        },
+                    },
+                    {
+                        path: "/resources/channel",
+                        loader: () => {
+                            return { countsByProperty: [] };
+                        },
+                    },
+                    {
+                        path: "/resources/conversions",
+                        loader: () => {
+                            return { rows: [] };
                         },
                     },
                 ],

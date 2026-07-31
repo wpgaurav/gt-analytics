@@ -134,6 +134,9 @@ describe("collectRequestHandler", () => {
                 "summer_sale", // utm_campaign
                 "running_shoes", // utm_term
                 "ad1", // utm_content
+                "google.com", // referrer host, normalised from the referrer
+                "search", // channel, derived from that referrer
+                "", // click id: none on this request
             ],
             doubles: [
                 1, // new visitor

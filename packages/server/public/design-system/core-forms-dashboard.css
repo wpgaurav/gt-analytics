@@ -96,6 +96,55 @@
     align-items: center;
 }
 
+/* --------------------------------------------------------------------------
+   Code block with a copy button. CFDS styles <pre> inside .prose-article
+   only, and this needs a header row regardless.
+   -------------------------------------------------------------------------- */
+
+.codeblock {
+    border: 1px solid var(--ink-200);
+    border-radius: var(--r-md);
+    overflow: hidden;
+    background: var(--bg-alt);
+}
+
+.codeblock__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap-md);
+    padding: var(--gap-xs) var(--gap-xs) var(--gap-xs) var(--gap-md);
+    border-block-end: 1px solid var(--ink-200);
+}
+
+.codeblock__label {
+    font-size: 0.76rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-500);
+}
+
+.codeblock__code {
+    margin: 0;
+    padding: var(--gap-md);
+    overflow-x: auto;
+    background: var(--bg);
+    font-family: var(--font-mono);
+    font-size: 0.82rem;
+    line-height: 1.6;
+    color: var(--ink-800);
+    tab-size: 2;
+}
+
+.codeblock__code code {
+    background: none;
+    padding: 0;
+    font: inherit;
+    color: inherit;
+    white-space: pre;
+}
+
 /* Sign-in: a single centred card, no nav chrome around it. */
 .signin {
     max-width: 420px;

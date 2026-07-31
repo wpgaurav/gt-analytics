@@ -30,6 +30,19 @@ export const ColumnMappings = {
     utmTerm: "blob14",
     utmContent: "blob15",
 
+    // Referral attribution, derived at collection time from the referrer,
+    // the UTM parameters and any ad-platform click ID. See analytics/referrer.
+    //
+    // referrerHost is the normalised source hostname (www stripped, self
+    // referrals removed), so a source does not split across rows the way the
+    // raw referrer in blob5 does.
+    referrerHost: "blob16",
+    // direct | search | ai | social | email | paid | referral | internal
+    channel: "blob17",
+    // Which click ID was on the landing URL, e.g. gclid. Names only -- the
+    // values identify an individual click and are not worth storing.
+    clickId: "blob18",
+
     /**
      * doubles
      */

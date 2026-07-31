@@ -4,6 +4,8 @@ export type CollectRequestParams = {
     r: string; // referrer
     sid: string; // siteId
     ht?: string; // hit type
+    sr?: string; // session first-touch referrer
+    ci?: string; // ad-platform click id parameter name
     [key: string]: string | undefined; // Allow additional string properties
 } & UtmParams;
 

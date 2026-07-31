@@ -144,6 +144,8 @@ function filtersToSql(filters: SearchFilters) {
         "utmCampaign",
         "utmTerm",
         "utmContent",
+        "channel",
+        "referrerHost",
     ];
 
     let filterStr = "";
@@ -696,6 +698,55 @@ export class AnalyticsEngineAPI {
             // sort by visitors
             return result.sort((a, b) => b[1] - a[1]);
         });
+    }
+
+    /**
+     * Traffic by channel: direct, search, ai, social, email, paid, referral,
+     * internal. Derived at collection time -- see analytics/referrer.
+     */
+    async getCountByChannel(
+        siteId: string,
+        interval: string,
+        tz?: string,
+        filters: SearchFilters = {},
+        page: number = 1,
+    ): Promise<[channel: string, visitors: number, views: number][]> {
+        const allCounts = await this.getAllCountsByColumn(
+            siteId,
+            "channel",
+            interval,
+            tz,
+            filters,
+            page,
+        );
+
+        return Object.entries(allCounts).map(([key, counts]) => [
+            key || "direct",
+            counts.visitors,
+            counts.views,
+        ]);
+    }
+
+    /** Traffic by normalised source hostname, rather than raw referrer URL. */
+    async getCountByReferrerHost(
+        siteId: string,
+        interval: string,
+        tz?: string,
+        filters: SearchFilters = {},
+        page: number = 1,
+    ): Promise<[host: string, visitors: number, views: number][]> {
+        const allCounts = await this.getAllCountsByColumn(
+            siteId,
+            "referrerHost",
+            interval,
+            tz,
+            filters,
+            page,
+        );
+
+        return Object.entries(allCounts)
+            .filter(([key]) => key !== "")
+            .map(([key, counts]) => [key, counts.visitors, counts.views]);
     }
 
     async getCountByCountry(

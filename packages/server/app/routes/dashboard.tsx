@@ -9,6 +9,7 @@ import {
 } from "react-router";
 
 import { ReferrerCard } from "./resources.referrer";
+import { ChannelCard } from "./resources.channel";
 import { PathsCard } from "./resources.paths";
 import { BrowserCard } from "./resources.browser";
 import { BrowserVersionCard } from "./resources.browserversion";
@@ -29,6 +30,7 @@ import { SearchFilters } from "~/lib/types";
 import SearchFilterBadges from "~/components/SearchFilterBadges";
 import { TimeSeriesCard } from "./resources.timeseries";
 import { StatsCard } from "./resources.stats";
+import { ConversionsCard } from "./resources.conversions";
 import { requireAuth } from "~/lib/auth";
 import { listSiteUrls } from "~/sites/sites";
 
@@ -253,6 +255,11 @@ export default function Dashboard() {
                 <div className="grid-cards grid-cards--2">
                     <PathsCard {...cardProps} linkBuilder={pathLinkBuilder} />
                     <ReferrerCard {...cardProps} />
+                </div>
+
+                <div className="grid-cards grid-cards--2">
+                    <ChannelCard {...cardProps} />
+                    <ConversionsCard {...cardProps} />
                 </div>
 
                 <div className="grid-cards grid-cards--3">

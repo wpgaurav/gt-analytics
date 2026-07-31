@@ -45,6 +45,46 @@ function init() {
         reporterUrl,
         autoTrackPageviews: true,
     });
+
+    installCommandQueue();
+}
+
+/**
+ * Wires up the public `gta()` command API and drains anything the install
+ * snippet's stub buffered while this script was still loading.
+ *
+ *   gta('conversion', 'signup', { value: 49, currency: 'INR' })
+ *   gta('event', 'download', { label: 'pricing-pdf' })
+ */
+function installCommandQueue() {
+    type Command = [string, string, Record<string, unknown>?];
+
+    const existing = window.gta;
+    const queued: Command[] = (existing && existing.q) || [];
+
+    const gta = function (...args: unknown[]) {
+        const [command, name, opts] = args as Command;
+
+        if (!command || !name) return;
+
+        if (command === "conversion") {
+            Counterscale.trackConversion(name, opts);
+        } else if (command === "event") {
+            Counterscale.trackEvent(name, opts);
+        }
+        // Unknown commands are ignored rather than thrown: a typo in a site's
+        // analytics call must not break the page it is on.
+    };
+
+    window.gta = gta;
+
+    for (const command of queued) {
+        try {
+            gta(...command);
+        } catch {
+            // One bad queued call should not stop the rest from flushing.
+        }
+    }
 }
 
 (function () {

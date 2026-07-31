@@ -11,6 +11,8 @@ export interface SearchFilters {
     utmCampaign?: string;
     utmTerm?: string;
     utmContent?: string;
+    channel?: string;
+    referrerHost?: string;
 }
 
 export interface User {

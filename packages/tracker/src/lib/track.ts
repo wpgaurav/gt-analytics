@@ -8,6 +8,10 @@ import {
     isLocalhostAddress,
 } from "../shared/utils";
 import { buildCollectRequestParams } from "../shared/request";
+import {
+    getSessionClickId,
+    rememberSessionReferrer,
+} from "./attribution";
 
 export type TrackPageviewOpts = {
     url?: string;
@@ -106,6 +110,11 @@ export async function trackPageview(
         // The collect endpoint will handle the missing parameters
     }
 
+    // First-touch attribution for the session, so pageviews after the landing
+    // page stay credited to wherever the visit actually came from.
+    const sessionReferrer = rememberSessionReferrer(referrer);
+    const clickId = getSessionClickId(window.location.search);
+
     const requestParams = buildCollectRequestParams(
         client.siteId,
         hostname,
@@ -113,6 +122,7 @@ export async function trackPageview(
         referrer,
         utmParams,
         hitType,
+        { sessionReferrer, clickId },
     );
 
     makeRequest(client.reporterUrl, requestParams);

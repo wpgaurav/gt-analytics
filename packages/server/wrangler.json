@@ -1,7 +1,9 @@
 {
     "main": "./workers/app.ts",
     "name": "counterscale-gauravtiwari",
-    "compatibility_flags": ["nodejs_compat_v2"],
+    "compatibility_flags": [
+        "nodejs_compat_v2"
+    ],
     "compatibility_date": "2024-12-13",
     "assets": {
         "binding": "ASSETS",
@@ -15,12 +17,17 @@
     ],
     "vars": {
         "VERSION": "3.4.1",
-        "CF_AE_DATASET": "counterscale_gauravtiwari_metrics"
+        "CF_AE_DATASET": "counterscale_gauravtiwari_metrics",
+        "CF_EVENTS_DATASET": "gt_analytics_events"
     },
     "analytics_engine_datasets": [
         {
             "binding": "WEB_COUNTER_AE",
             "dataset": "counterscale_gauravtiwari_metrics"
+        },
+        {
+            "binding": "EVENTS_AE",
+            "dataset": "gt_analytics_events"
         }
     ],
     "r2_buckets": [

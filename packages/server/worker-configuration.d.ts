@@ -14,10 +14,14 @@ declare namespace Cloudflare {
 		 *  `analytics_engine_datasets` binding below, or reads and writes
 		 *  address different tables. */
 		CF_AE_DATASET: string;
+		/** Analytics Engine dataset holding custom events and conversions. */
+		CF_EVENTS_DATASET: string;
 		/** Bearer token for machine access to the JSON API. */
 		CF_API_TOKEN: string;
 		DAILY_ROLLUPS: R2Bucket;
 		WEB_COUNTER_AE: AnalyticsEngineDataset;
+		/** Custom events and conversions. */
+		EVENTS_AE: AnalyticsEngineDataset;
 		ASSETS: Fetcher;
 		/** Tracked sites: id, label, base URL used to build report links. */
 		SITES_DB: D1Database;
