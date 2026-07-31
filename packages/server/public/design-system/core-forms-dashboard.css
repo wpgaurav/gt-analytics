@@ -1398,3 +1398,82 @@
     text-overflow: ellipsis;
     white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------------------
+   Range picker
+
+   A preset select with a panel for explicit dates. The panel is positioned
+   against the picker rather than the toolbar so it stays under the control
+   that opened it when the toolbar wraps on narrow screens.
+   --------------------------------------------------------------------------- */
+
+.range-picker {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.range-picker__toggle {
+    padding-inline: 8px;
+}
+
+.range-picker__panel {
+    position: absolute;
+    inset-block-start: calc(100% + 6px);
+    inset-inline-start: 0;
+    z-index: 30;
+    min-width: 320px;
+    padding: var(--gap-md);
+    background: var(--bg);
+    border: 1px solid var(--ink-200);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-lg);
+}
+
+.range-picker__fields {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: var(--gap-sm);
+}
+
+.range-picker__fields label {
+    display: block;
+    margin-block-end: 4px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--ink-600);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+}
+
+.range-picker__note {
+    margin-block-start: var(--gap-sm);
+    font-size: 0.82rem;
+    line-height: 1.45;
+    color: var(--ink-500);
+}
+
+.range-picker__error {
+    margin-block-start: var(--gap-sm);
+    font-size: 0.85rem;
+    color: var(--danger-500);
+}
+
+.range-picker__actions {
+    display: flex;
+    gap: 8px;
+    margin-block-start: var(--gap-md);
+}
+
+@media (max-width: 640px) {
+    .range-picker__panel {
+        /* Below 380px two date inputs do not fit side by side, and the native
+           picker widget is wider than the column it would be given. */
+        min-width: min(320px, calc(100vw - 32px));
+    }
+
+    .range-picker__fields {
+        grid-template-columns: 1fr;
+    }
+}

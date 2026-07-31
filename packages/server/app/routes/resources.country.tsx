@@ -26,14 +26,15 @@ function convertCountryCodesToNames(
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
     await requireApiAuth(request, context.cloudflare.env);
-    const { analyticsEngine } = context;
+    const { history } = context;
     const { interval, site, page = 1 } = paramsFromUrl(request.url);
     const url = new URL(request.url);
     const tz = url.searchParams.get("timezone") || "UTC";
     const filters = getFiltersFromSearchParams(url.searchParams);
 
-    const countsByCountry = await analyticsEngine.getCountByCountry(
+    const countsByCountry = await history.getVisitorCountByColumn(
         site,
+        "country",
         interval,
         tz,
         filters,

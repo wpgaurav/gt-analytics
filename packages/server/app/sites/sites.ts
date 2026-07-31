@@ -16,6 +16,12 @@ export interface Site {
     base_url: string | null;
     timezone: string;
     enabled: number;
+    /**
+     * First day this site's own collection is authoritative for. Days before
+     * it are read from the archive even when retention would still cover them
+     * -- see migration 0004. NULL for a site that has always collected here.
+     */
+    live_from: string | null;
     created_at: string;
     updated_at: string;
 }
@@ -43,6 +49,26 @@ export async function getSite(
         .prepare(`SELECT * FROM sites WHERE site_id = ?`)
         .bind(siteId)
         .first<Site>();
+}
+
+/**
+ * Returns site_id -> live_from for every site that has one.
+ *
+ * Read once per request rather than per card, so the router can be told where
+ * a site's own data starts without every report making its own D1 call.
+ */
+export async function listSiteLiveFrom(
+    db: D1Database,
+): Promise<Record<string, string>> {
+    const { results } = await db
+        .prepare(
+            `SELECT site_id, live_from FROM sites WHERE live_from IS NOT NULL`,
+        )
+        .all<{ site_id: string; live_from: string }>();
+
+    return Object.fromEntries(
+        (results ?? []).map((row) => [row.site_id, row.live_from]),
+    );
 }
 
 /**

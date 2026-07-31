@@ -7,6 +7,10 @@
         "lib": ["DOM", "DOM.Iterable", "ES2022"],
         "sourceMap": true,
         "isolatedModules": true,
+        // scripts/ are run directly by Node's type stripping, which requires
+        // the real .ts extension on relative imports. Safe here because the
+        // project is noEmit.
+        "allowImportingTsExtensions": true,
         "esModuleInterop": true,
         "jsx": "react-jsx",
         "module": "ESNext",

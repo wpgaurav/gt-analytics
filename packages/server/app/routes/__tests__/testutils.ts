@@ -1,4 +1,5 @@
 import { AnalyticsEngineAPI } from "../../analytics/query";
+import { HistoryAPI } from "../../analytics/history";
 
 export function createFetchResponse<T>(data: T) {
     return {
@@ -8,12 +9,19 @@ export function createFetchResponse<T>(data: T) {
 }
 
 export function getDefaultContext() {
+    const analyticsEngine = new AnalyticsEngineAPI(
+        "testAccountId",
+        "testApiToken",
+    );
+
     return {
         context: {
-            analyticsEngine: new AnalyticsEngineAPI(
-                "testAccountId",
-                "testApiToken",
-            ),
+            analyticsEngine,
+            // No R2 bucket and no sites database, so every range routes to
+            // Analytics Engine and reaches the same mocked fetch. Tests that
+            // care about archive behaviour construct their own HistoryAPI with
+            // a stub bucket.
+            history: new HistoryAPI(analyticsEngine, undefined),
             cloudflare: {
                 env: {
                     CF_BEARER_TOKEN: "fake",

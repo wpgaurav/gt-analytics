@@ -16,17 +16,9 @@ import PagesTable, {
     type PageRow,
 } from "~/components/PagesTable";
 import Icon from "~/components/Icon";
+import RangePicker from "~/components/RangePicker";
 
 export const meta: MetaFunction = () => [{ title: "Pages — GT Analytics" }];
-
-const INTERVALS = [
-    ["today", "Today"],
-    ["yesterday", "Yesterday"],
-    ["1d", "24 hours"],
-    ["7d", "7 days"],
-    ["30d", "30 days"],
-    ["90d", "90 days"],
-] as const;
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
     await requireAuth(request, context.cloudflare.env);
@@ -174,21 +166,10 @@ export default function Pages() {
                     ))}
                 </select>
 
-                <label className="visually-hidden" htmlFor="pages-interval">
-                    Time range
-                </label>
-                <select
-                    id="pages-interval"
-                    className="select"
+                <RangePicker
                     value={interval}
-                    onChange={(e) => update({ interval: e.target.value })}
-                >
-                    {INTERVALS.map(([value, label]) => (
-                        <option key={value} value={value}>
-                            {label}
-                        </option>
-                    ))}
-                </select>
+                    onChange={(value) => update({ interval: value })}
+                />
             </div>
 
             <div className="kpis">

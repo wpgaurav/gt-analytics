@@ -9,7 +9,7 @@ import { requireApiAuth } from "~/lib/api-auth";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
     await requireApiAuth(request, context.cloudflare.env);
-    const { analyticsEngine } = context;
+    const { history } = context;
 
     const { interval, site, page = 1 } = paramsFromUrl(request.url);
     const url = new URL(request.url);
@@ -17,8 +17,9 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     const filters = getFiltersFromSearchParams(url.searchParams);
 
     return {
-        countsByProperty: await analyticsEngine.getCountByUtmContent(
-            site,
+        countsByProperty: await history.getVisitorCountByColumn(
+        site,
+        "utmContent",
             interval,
             tz,
             filters,

@@ -18,7 +18,7 @@ export async function loader({
 }: LoaderFunctionArgs) {
     await requireApiAuth(request, context.cloudflare.env);
 
-    const { analyticsEngine } = context;
+    const { analyticsEngine, history } = context;
     const { interval, site } = paramsFromUrl(request.url);
     const url = new URL(request.url);
     const tz = url.searchParams.get("timezone") || "UTC";
@@ -27,15 +27,40 @@ export async function loader({
     const intervalType = getIntervalType(interval);
     const { startDate, endDate } = getDateTimeRange(interval, tz);
 
-    const viewsGroupedByInterval: ViewsGroupedByInterval =
-        await analyticsEngine.getViewsGroupedByInterval(
-            site,
-            intervalType,
-            startDate,
-            endDate,
-            tz,
-            filters,
+    // Hourly resolution only exists in Analytics Engine; archived days are
+    // rolled up per day and have no sub-day detail to draw. So the hourly
+    // shape stays on the direct query -- a single-day range is inside
+    // retention by definition and never reaches the archive anyway.
+    let viewsGroupedByInterval: ViewsGroupedByInterval;
+
+    if (intervalType === "HOUR") {
+        viewsGroupedByInterval =
+            await analyticsEngine.getViewsGroupedByInterval(
+                site,
+                intervalType,
+                startDate,
+                endDate,
+                tz,
+                filters,
+            );
+    } else {
+        const { data } = await history.getSeries(site, interval, tz, filters);
+        viewsGroupedByInterval = data.map(
+            (point: {
+                date: string;
+                views: number;
+                visitors: number;
+                bounces: number;
+            }): ViewsGroupedByInterval[number] => [
+                point.date,
+                {
+                    views: point.views,
+                    visitors: point.visitors,
+                    bounces: point.bounces,
+                },
+            ],
         );
+    }
 
     const chartData: {
         date: string;

@@ -1,4 +1,5 @@
 import { ColumnMappingToType, ColumnMappings } from "./schema";
+import { isCustomRange, parseRange, rangeToSql } from "./range";
 
 import { SearchFilters } from "~/lib/types";
 
@@ -65,6 +66,15 @@ export function intervalToSql(
 ) {
     let startIntervalSql = "";
     let endIntervalSql = "";
+
+    // An explicit date range. Handled before the named tokens so every query
+    // method that already funnels through here supports a custom range without
+    // knowing anything about it.
+    if (isCustomRange(interval)) {
+        const range = parseRange(interval, tz);
+        return rangeToSql(range.start, range.end, tz);
+    }
+
     switch (interval) {
         case "today":
             // example: toDateTime('2024-01-07 00:00:00', 'America/New_York')
@@ -79,6 +89,8 @@ export function intervalToSql(
         case "7d":
         case "30d":
         case "90d":
+        case "180d":
+        case "365d":
             startIntervalSql = `toStartOfInterval(NOW() - INTERVAL '${interval.split("d")[0]}' DAY, INTERVAL '${bucketIntervalMinutes}' MINUTE)`;
             endIntervalSql = `toStartOfInterval(NOW(), INTERVAL '${bucketIntervalMinutes}' MINUTE)`;
             break;
@@ -494,82 +506,93 @@ export class AnalyticsEngineAPI {
         return returnPromise;
     }
 
-    async getAllCountsByAllColumnsForAllSites(
+    /**
+     * One day, pre-aggregated by day and dimension combination, for archival.
+     *
+     * The archive is the only copy of a day once Analytics Engine's 90 days
+     * expire, so this query is the point where fidelity is decided -- what it
+     * omits is gone permanently.
+     *
+     * Two things it will not do:
+     *
+     * It groups by `toDate(timestamp)`, not by `timestamp`. Analytics Engine
+     * timestamps are sub-second, so grouping by the raw value produces roughly
+     * one row per pageview: a raw dump wearing a rollup's name, tens of times
+     * larger and no more informative.
+     *
+     * It takes an explicit dimension list rather than every column. The rows
+     * are one per *combination* of dimensions, so cardinality multiplies --
+     * including the raw user agent string alone would multiply the row count by
+     * the number of distinct browsers seen that day, for information already
+     * decomposed into browserName, browserVersion, deviceType and deviceModel.
+     *
+     * `truncated` reports whether the row limit was hit, because a rollup that
+     * quietly drops the tail would understate every total from then on and
+     * there would be no way to tell after the fact.
+     */
+    async getDailyRollup(
         columns: (keyof typeof ColumnMappings)[],
-        startDateTime: Date,
-        endDateTime: Date,
+        startDate: string,
+        endDate: string,
         tz?: string,
-    ): Promise<Map<string[], AnalyticsCountResult>> {
+        limit = 100_000,
+    ): Promise<{
+        rows: Record<string, string | number>[];
+        truncated: boolean;
+    }> {
         const columnsStr = columns.map((c) => ColumnMappings[c]).join(", ");
         const columnsStrWithAliases = columns
-            .map((c) => ColumnMappings[c] + " as " + c)
+            .map((c) => `${ColumnMappings[c]} as ${c}`)
             .join(", ");
 
-        const startDateTimeSql = dayjs(startDateTime)
-            .tz(tz)
-            .utc()
-            .format("YYYY-MM-DD HH:mm:ss");
-        const endDateTimeSql = dayjs(endDateTime)
-            .tz(tz)
-            .utc()
-            .format("YYYY-MM-DD HH:mm:ss");
+        const { startIntervalSql, endIntervalSql } = rangeToSql(
+            startDate,
+            endDate,
+            tz,
+        );
 
         const query = `
-            SELECT 
-                timestamp,
-                SUM(_sample_interval) as count,
-                ${ColumnMappings.siteId} as siteId, 
-                ${ColumnMappings.newVisitor} as isVisitor, 
-                ${ColumnMappings.bounce} as isBounce,
+            SELECT
+                toDate(timestamp) as date,
+                ${ColumnMappings.siteId} as siteId,
+                SUM(_sample_interval) as views,
+                SUM(IF(${ColumnMappings.newVisitor} = 1, _sample_interval, 0)) as visitors,
+                SUM(_sample_interval * ${ColumnMappings.bounce}) as bounces,
                 ${columnsStrWithAliases}
             FROM ${this.dataset}
-            WHERE timestamp >= toDateTime('${startDateTimeSql}') AND timestamp < toDateTime('${endDateTimeSql}')
-            GROUP BY timestamp,
-                ${ColumnMappings.siteId}, 
-                ${ColumnMappings.newVisitor}, 
-                ${ColumnMappings.bounce}, 
+            WHERE timestamp >= ${startIntervalSql}
+              AND timestamp < ${endIntervalSql}
+            GROUP BY date,
+                ${ColumnMappings.siteId},
                 ${columnsStr}
-            ORDER BY count DESC
+            ORDER BY views DESC
+            LIMIT ${limit}
         `;
 
-        type SelectionSet = {
-            date: string;
-            count: number;
-            isVisitor: number;
-            isBounce: number;
-        } & {
-            [K in keyof typeof ColumnMappings]: string;
-        };
+        const response = await this.query(query);
+        if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+        }
 
-        return this.query(query).then(async (response) => {
-            if (!response.ok) {
-                throw new Error(response.status + response.statusText);
+        const body = (await response.json()) as AnalyticsQueryResult<
+            Record<string, string | number>
+        >;
+
+        const rows = (body.data ?? []).map((row) => {
+            const out: Record<string, string | number> = {
+                date: String(row.date).slice(0, 10),
+                siteId: String(row.siteId ?? ""),
+                views: Number(row.views) || 0,
+                visitors: Number(row.visitors) || 0,
+                bounces: Number(row.bounces) || 0,
+            };
+            for (const column of columns) {
+                out[column] = String(row[column] ?? "").trim();
             }
-
-            const responseData =
-                (await response.json()) as AnalyticsQueryResult<SelectionSet>;
-
-
-            return responseData.data.reduce((acc, row) => {
-                // key is the comma joined string of siteId + all columns
-                const key = [
-                    row.date,
-                    row.siteId,
-                    ...columns.map((c) => String(row[c]).trim()),
-                ];
-
-                if (!acc.has(key)) {
-                    acc.set(key, {
-                        views: 0,
-                        visitors: 0,
-                        bounces: 0,
-                    } as AnalyticsCountResult);
-                }
-
-                accumulateCountsFromRowResult(acc.get(key)!, row);
-                return acc;
-            }, new Map<string[], AnalyticsCountResult>());
+            return out;
         });
+
+        return { rows, truncated: rows.length >= limit };
     }
 
     async getAllCountsByColumn<T extends keyof typeof ColumnMappings>(

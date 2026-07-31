@@ -1,5 +1,6 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { loader } from "../resources.stats";
+import { HistoryAPI } from "~/analytics/history";
 
 vi.mock("~/lib/api-auth", () => ({
     requireApiAuth: vi.fn(),
@@ -28,11 +29,17 @@ describe("resources.stats loader", () => {
             earliestBounce: new Date("2023-01-01T00:00:00Z"),
         });
 
+        const analyticsEngine = {
+            getCounts: mockGetCounts,
+            getEarliestEvents: mockGetEarliestEvents,
+        };
+
         const context = {
-            analyticsEngine: {
-                getCounts: mockGetCounts,
-                getEarliestEvents: mockGetEarliestEvents,
-            },
+            analyticsEngine,
+            // A real router over the mock: with no bucket, a recent range
+            // routes straight to Analytics Engine and reaches mockGetCounts.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            history: new HistoryAPI(analyticsEngine as any, undefined),
             cloudflare: {
                 env: {
                     CF_PASSWORD_HASH: "$2b$12$test.hash.value",
@@ -72,11 +79,17 @@ describe("resources.stats loader", () => {
             earliestBounce: new Date("2023-01-04T00:00:00Z"), // Jan 4
         });
 
+        const analyticsEngine = {
+            getCounts: mockGetCounts,
+            getEarliestEvents: mockGetEarliestEvents,
+        };
+
         const context = {
-            analyticsEngine: {
-                getCounts: mockGetCounts,
-                getEarliestEvents: mockGetEarliestEvents,
-            },
+            analyticsEngine,
+            // A real router over the mock: with no bucket, a recent range
+            // routes straight to Analytics Engine and reaches mockGetCounts.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            history: new HistoryAPI(analyticsEngine as any, undefined),
             cloudflare: {
                 env: {
                     CF_PASSWORD_HASH: "$2b$12$test.hash.value",
@@ -110,11 +123,17 @@ describe("resources.stats loader", () => {
             earliestBounce: new Date("2023-01-04T00:00:00Z"), // Jan 4 -- well before Jan 8th minus 1 day interval
         });
 
+        const analyticsEngine = {
+            getCounts: mockGetCounts,
+            getEarliestEvents: mockGetEarliestEvents,
+        };
+
         const context = {
-            analyticsEngine: {
-                getCounts: mockGetCounts,
-                getEarliestEvents: mockGetEarliestEvents,
-            },
+            analyticsEngine,
+            // A real router over the mock: with no bucket, a recent range
+            // routes straight to Analytics Engine and reaches mockGetCounts.
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            history: new HistoryAPI(analyticsEngine as any, undefined),
             cloudflare: {
                 env: {
                     CF_PASSWORD_HASH: "$2b$12$test.hash.value",

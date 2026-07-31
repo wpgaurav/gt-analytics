@@ -68,7 +68,8 @@ describe("Analytics Engine dataset configuration", () => {
             api.getAllCountsByColumn("site", "path", "7d"),
             api.getSitesOrderedByHits("7d"),
             api.getEarliestEvents("site"),
-            api.getAllCountsByAllColumnsForAllSites(["path"], start, end),
+            api.getDailyRollup(["path"], "2026-07-01", "2026-07-31"),
+            api.getPageMetrics("site", "7d"),
         ]);
 
         const queries = sqlSent();

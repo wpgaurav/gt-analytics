@@ -22,22 +22,44 @@ export interface ArchiveRow {
     [dimension: string]: string | number;
 }
 
+/**
+ * The dimensions every archived day carries.
+ *
+ * Archive rows are one per *combination* of these, so each addition multiplies
+ * the row count rather than adding to it. That is the whole reason the list is
+ * curated instead of being "every column".
+ *
+ * Deliberately absent:
+ *
+ * - `userAgent`, the raw string. Effectively unique per visitor, and already
+ *   decomposed at collection time into browserName, browserVersion, deviceType
+ *   and deviceModel -- all four of which are here. Keeping it would multiply
+ *   every day's file for nothing the dashboard can report on.
+ * - `newVisitor` and `bounce`, which are not dimensions. They are summed into
+ *   the visitors and bounces measures.
+ */
+export const ARCHIVE_DIMENSIONS = [
+    "path",
+    "entryPath",
+    "referrer",
+    "referrerHost",
+    "channel",
+    "clickId",
+    "country",
+    "browserName",
+    "browserVersion",
+    "deviceType",
+    "deviceModel",
+    "host",
+    "utmSource",
+    "utmMedium",
+    "utmCampaign",
+    "utmTerm",
+    "utmContent",
+] as const;
+
 /** Dimensions a report can group an archived range by. */
-export type ArchiveDimension =
-    | "path"
-    | "referrer"
-    | "referrerHost"
-    | "channel"
-    | "country"
-    | "browserName"
-    | "browserVersion"
-    | "deviceType"
-    | "deviceModel"
-    | "utmSource"
-    | "utmMedium"
-    | "utmCampaign"
-    | "utmTerm"
-    | "utmContent";
+export type ArchiveDimension = (typeof ARCHIVE_DIMENSIONS)[number];
 
 export function archiveKey(date: string): string {
     return `analytics-${date}.arrow`;
@@ -194,14 +216,22 @@ export function totalsForSite(
 export function seriesByDay(
     rows: ArchiveRow[],
     siteId: string,
-): { date: string; views: number; visitors: number }[] {
-    const byDate = new Map<string, { views: number; visitors: number }>();
+): { date: string; views: number; visitors: number; bounces: number }[] {
+    const byDate = new Map<
+        string,
+        { views: number; visitors: number; bounces: number }
+    >();
 
     for (const row of rows) {
         if (siteId && row.siteId !== siteId) continue;
-        const existing = byDate.get(row.date) ?? { views: 0, visitors: 0 };
+        const existing = byDate.get(row.date) ?? {
+            views: 0,
+            visitors: 0,
+            bounces: 0,
+        };
         existing.views += row.views;
         existing.visitors += row.visitors;
+        existing.bounces += row.bounces;
         byDate.set(row.date, existing);
     }
 

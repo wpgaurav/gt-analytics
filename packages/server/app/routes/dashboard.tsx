@@ -28,6 +28,7 @@ import {
 } from "~/lib/utils";
 import { SearchFilters } from "~/lib/types";
 import SearchFilterBadges from "~/components/SearchFilterBadges";
+import RangePicker from "~/components/RangePicker";
 import { TimeSeriesCard } from "./resources.timeseries";
 import { StatsCard } from "./resources.stats";
 import { ConversionsCard } from "./resources.conversions";
@@ -264,22 +265,10 @@ export default function Dashboard() {
                     ))}
                 </select>
 
-                <label className="visually-hidden" htmlFor="interval-picker">
-                    Time range
-                </label>
-                <select
-                    id="interval-picker"
-                    className="select"
+                <RangePicker
                     value={data.interval}
-                    onChange={(e) => changeInterval(e.target.value)}
-                >
-                    <option value="today">Today</option>
-                    <option value="yesterday">Yesterday</option>
-                    <option value="1d">24 hours</option>
-                    <option value="7d">7 days</option>
-                    <option value="30d">30 days</option>
-                    <option value="90d">90 days</option>
-                </select>
+                    onChange={changeInterval}
+                />
 
                 <SearchFilterBadges
                     filters={data.filters}

@@ -1,6 +1,7 @@
 import { type AppLoadContext } from "react-router";
 import { type PlatformProxy } from "wrangler";
 import { AnalyticsEngineAPI } from "./analytics/query";
+import { HistoryAPI } from "./analytics/history";
 
 interface ExtendedEnv extends Env {
     CF_PAGES_COMMIT_SHA: string;
@@ -12,6 +13,12 @@ declare module "react-router" {
     interface AppLoadContext {
         cloudflare: Cloudflare;
         analyticsEngine: AnalyticsEngineAPI;
+        /**
+         * Reads across both stores. Use this for anything that accepts a
+         * user-chosen range; `analyticsEngine` alone silently returns nothing
+         * for days older than 90.
+         */
+        history: HistoryAPI;
     }
 }
 
@@ -31,5 +38,10 @@ export const getLoadContext: GetLoadContext = ({ context }) => {
     return {
         ...context,
         analyticsEngine: analyticsEngine,
+        history: new HistoryAPI(
+            analyticsEngine,
+            context.cloudflare.env.DAILY_ROLLUPS,
+            context.cloudflare.env.SITES_DB,
+        ),
     };
 };

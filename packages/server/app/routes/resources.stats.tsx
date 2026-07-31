@@ -11,7 +11,7 @@ import { requireApiAuth } from "~/lib/api-auth";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
     await requireApiAuth(request, context.cloudflare.env);
-    const { analyticsEngine } = context;
+    const { analyticsEngine, history } = context;
     const { interval, site } = paramsFromUrl(request.url);
     const url = new URL(request.url);
     const tz = url.searchParams.get("timezone") || "UTC";
@@ -19,7 +19,15 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
     // intentionally parallelize queries by deferring await
     const earliestEvents = analyticsEngine.getEarliestEvents(site);
-    const counts = await analyticsEngine.getCounts(site, interval, tz, filters);
+    // Routed rather than read straight from Analytics Engine: for a range
+    // older than retention, or older than a migrated site's cutover date, the
+    // archive is where the numbers actually are.
+    const { data: counts, source } = await history.getCounts(
+        site,
+        interval,
+        tz,
+        filters,
+    );
 
     const { earliestEvent, earliestBounce } = await earliestEvents;
     const { startDate } = getDateTimeRange(interval, tz);
@@ -49,7 +57,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
         views: counts.views,
         visitors: counts.visitors,
         bounceRate: bounceRate,
-        hasSufficientBounceData,
+        // Archived days carry a bounce total but no earliest-bounce marker to
+        // check it against, so the completeness test above only applies to
+        // days Analytics Engine answered.
+        hasSufficientBounceData:
+            source === "ae" ? hasSufficientBounceData : counts.bounces > 0,
     };
 }
 

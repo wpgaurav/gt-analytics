@@ -1,161 +1,73 @@
+/**
+ * Nightly rollup: one Arrow file per finished day, in R2.
+ *
+ * Analytics Engine keeps 90 days and cannot be written to retroactively --
+ * `writeDataPoint` has no timestamp field -- so once a day ages out, this file
+ * is the only copy of it that will ever exist. That makes the archive the
+ * long-term store rather than a backup, and makes what the rollup omits a
+ * permanent loss rather than a temporary one.
+ */
+
 import { AnalyticsEngineAPI } from "../../app/analytics/query";
-import { ColumnMappings } from "../../app/analytics/schema";
+import { ARCHIVE_DIMENSIONS } from "../../app/analytics/archive";
 import { tableFromJSON, tableToIPC } from "apache-arrow";
 import dayjs from "dayjs";
 
+export interface RollupResult {
+    filename: string;
+    recordCount: number;
+    truncated: boolean;
+}
+
+/**
+ * Archives one day, defaulting to yesterday.
+ *
+ * Yesterday rather than today because a day is only archived once and a
+ * partial day would be frozen in place -- Analytics Engine still holds the
+ * live copy of today, so there is nothing to gain by archiving it early.
+ */
 export async function extractAsArrow(
     {
         accountId,
         bearerToken,
         dataset,
-    }: { accountId: string; bearerToken: string; dataset?: string },
+        date,
+    }: {
+        accountId: string;
+        bearerToken: string;
+        dataset?: string;
+        date?: string;
+    },
     bucket: R2Bucket,
-) {
+): Promise<RollupResult> {
     const api = new AnalyticsEngineAPI(accountId, bearerToken, dataset);
+    const day = date || dayjs().subtract(1, "day").format("YYYY-MM-DD");
 
-    // Get yesterday's date range
-    const yesterday = dayjs().subtract(1, "day");
-    const startDateTime = yesterday.startOf("day").toDate();
-    const endDateTime = yesterday.endOf("day").toDate();
-
-    // Get all columns we want to extract
-    const columns = Object.keys(ColumnMappings).filter(
-        (key) => key !== "siteId" && key !== "newVisitor" && key !== "bounce",
-    ) as (keyof typeof ColumnMappings)[];
-
-    // Fetch data for yesterday
-    const data = await api.getAllCountsByAllColumnsForAllSites(
-        columns,
-        startDateTime,
-        endDateTime,
+    const { rows, truncated } = await api.getDailyRollup(
+        [...ARCHIVE_DIMENSIONS],
+        day,
+        day,
     );
 
-    // Convert Map to array of records for Arrow table creation
-    const records: any[] = [];
-    data.forEach((counts, key) => {
-        const [date, siteId, ...columnValues] = key;
-        const record: any = {
-            date,
-            siteId,
-            views: counts.views,
-            visitors: counts.visitors,
-            bounces: counts.bounces,
-        };
+    const filename = `analytics-${day}.arrow`;
 
-        // Add column values
-        columns.forEach((column, index) => {
-            record[column] = columnValues[index];
-        });
+    if (rows.length === 0) {
+        // Writing an empty Arrow file would be worse than writing nothing:
+        // tableFromJSON cannot infer a schema from zero records, and a
+        // zero-row file is indistinguishable from a day with no traffic.
+        console.log(`No data for ${day}; nothing archived.`);
+        return { filename, recordCount: 0, truncated: false };
+    }
 
-        records.push(record);
-    });
+    const table = tableFromJSON(rows);
+    await bucket.put(filename, new Uint8Array(tableToIPC(table, "file")));
 
-    // Create Arrow table from JSON records
-    const table = tableFromJSON(records);
+    if (truncated) {
+        console.error(
+            `Rollup for ${day} hit the row limit -- the archive for that day is incomplete.`,
+        );
+    }
+    console.log(`Saved ${rows.length} records to ${filename}`);
 
-    // Convert to Arrow IPC buffer
-    const arrowBuffer = new Uint8Array(tableToIPC(table, "file"));
-
-    // Generate filename with yesterday's date
-    const filename = `analytics-${yesterday.format("YYYY-MM-DD")}.arrow`;
-
-    // Save to R2
-    await bucket.put(filename, arrowBuffer);
-
-    console.log(`Saved ${records.length} records to ${filename}`);
-
-    return { filename, recordCount: records.length };
-}
-
-// IIFE for testing
-if (import.meta.url === `file://${process.argv[1]}`) {
-    (async () => {
-        // Mock R2 bucket for local testing
-        const mockBucket = {
-            put: async (filename: string, data: Uint8Array) => {
-                console.log(
-                    `Mock: Would save ${data.length} bytes to ${filename}`,
-                );
-                return {
-                    key: filename,
-                    version: "mock",
-                    size: data.length,
-                    etag: "mock",
-                    httpEtag: "mock",
-                    uploaded: new Date(),
-                    checksums: { md5: "mock", sha1: "mock", sha256: "mock" },
-                    storageClass: "STANDARD",
-                    writeHttpMetadata: {},
-                };
-            },
-            head: async () => null,
-            get: async () => null,
-            delete: async () => {},
-            createMultipartUpload: async () => ({
-                uploadId: "mock",
-                key: "mock",
-                uploadPart: async () => ({ partNumber: 1, etag: "mock" }),
-                abort: async () => {},
-                complete: async () => ({
-                    key: "mock",
-                    version: "mock",
-                    size: 0,
-                    etag: "mock",
-                    httpEtag: "mock",
-                    uploaded: new Date(),
-                    checksums: { md5: "mock", sha1: "mock", sha256: "mock" },
-                    storageClass: "STANDARD",
-                    writeHttpMetadata: {},
-                }),
-            }),
-            resumeMultipartUpload: async () => ({
-                uploadId: "mock",
-                key: "mock",
-                uploadPart: async () => ({ partNumber: 1, etag: "mock" }),
-                abort: async () => {},
-                complete: async () => ({
-                    key: "mock",
-                    version: "mock",
-                    size: 0,
-                    etag: "mock",
-                    httpEtag: "mock",
-                    uploaded: new Date(),
-                    checksums: { md5: "mock", sha1: "mock", sha256: "mock" },
-                    storageClass: "STANDARD",
-                    writeHttpMetadata: {},
-                }),
-            }),
-            list: async () => ({
-                objects: [],
-                delimitedPrefixes: [],
-                truncated: false,
-            }),
-        } as unknown as R2Bucket;
-
-        // Get credentials from environment variables
-        const accountId = process.env.CLOUDFLARE_ACCOUNT_ID;
-        const bearerToken = process.env.CLOUDFLARE_API_TOKEN;
-
-        if (!accountId || !bearerToken) {
-            console.error(
-                "Error: Please set CLOUDFLARE_ACCOUNT_ID and CLOUDFLARE_API_TOKEN environment variables",
-            );
-            process.exit(1);
-        }
-
-        try {
-            const result = await extractAsArrow(
-                {
-                    accountId,
-                    bearerToken,
-                    dataset: process.env.CLOUDFLARE_AE_DATASET,
-                },
-                mockBucket,
-            );
-            console.log("Success:", result);
-        } catch (error) {
-            console.error("Error:", error);
-            process.exit(1);
-        }
-    })();
+    return { filename, recordCount: rows.length, truncated };
 }
