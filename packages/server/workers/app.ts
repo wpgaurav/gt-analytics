@@ -13,15 +13,45 @@ import { createRequestHandler, type ServerBuild } from "react-router";
 import { getLoadContext } from "../app/load-context";
 import * as build from "../build/server";
 import { extractAsArrow } from "./lib/arrow";
+import { syncAllSites } from "../app/content/wp-sync";
 
 const requestHandler = createRequestHandler(build as unknown as ServerBuild);
 
+/** Cron expression for the hourly WordPress content sync. */
+const CONTENT_SYNC_CRON = "17 * * * *";
+
 export default {
         async scheduled(
-        _controller: ScheduledController,
+        controller: ScheduledController,
         env: Env,
         ctx: ExecutionContext,
     ) {
+        // Two schedules share this handler; dispatch on which one fired rather
+        // than running both jobs every time.
+        if (controller.cron === CONTENT_SYNC_CRON) {
+            ctx.waitUntil(
+                syncAllSites(env.CONTENT_DB, env.CONTENT_MAP)
+                    .then((results) => {
+                        for (const result of results) {
+                            if (result.status === "error") {
+                                console.error(
+                                    `content sync failed for ${result.siteId}:`,
+                                    result.error ??
+                                        result.types
+                                            .filter((t) => t.status === "error")
+                                            .map((t) => `${t.postType}: ${t.error}`)
+                                            .join("; "),
+                                );
+                            }
+                        }
+                    })
+                    .catch((error) => {
+                        console.error("content sync failed", error);
+                    }),
+            );
+            return;
+        }
+
         if (env.CF_STORAGE_ENABLED === "false") return
         // NOTE: the catch must hang off the promise, not wrap the waitUntil
         // call. waitUntil returns synchronously, so a try/catch around it only

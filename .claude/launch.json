@@ -1,0 +1,11 @@
+{
+    "version": "0.0.1",
+    "configurations": [
+        {
+            "name": "gt-analytics",
+            "runtimeExecutable": "pnpm",
+            "runtimeArgs": ["--filter", "@counterscale/server", "dev"],
+            "port": 3005
+        }
+    ]
+}

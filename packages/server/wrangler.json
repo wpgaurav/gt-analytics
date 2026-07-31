@@ -30,9 +30,24 @@
             "binding": "DAILY_ROLLUPS"
         }
     ],
+    "d1_databases": [
+        {
+            "binding": "CONTENT_DB",
+            "database_name": "gt-analytics",
+            "database_id": "1e72785c-db7c-4492-a475-b8d4afd7ec72",
+            "migrations_dir": "migrations"
+        }
+    ],
+    "kv_namespaces": [
+        {
+            "binding": "CONTENT_MAP",
+            "id": "7adfea91ad5242769742030a3a4abe62"
+        }
+    ],
     "triggers": {
         "crons": [
-            "0 2 * * *"
+            "0 2 * * *",
+            "17 * * * *"
         ]
     }
 }

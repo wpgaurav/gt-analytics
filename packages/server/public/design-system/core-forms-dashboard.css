@@ -1,0 +1,595 @@
+/* ===========================================================================
+   Core Forms Design System - dashboard extension
+   ===========================================================================
+
+   The Core Forms Design System is a marketing-site system. It has buttons,
+   nav, cards, sections, pricing, FAQ and prose, but no application shell, no
+   data grid, no generic form field, no pagination, no empty state and no chart
+   colours. This layer adds exactly those, written only in CFDS tokens so the
+   two files stay one design language.
+
+   Rules for anything added here:
+     - Use CFDS custom properties. No raw hex, no invented spacing scale
+       beyond the --gap-* below (CFDS ships no spacing tokens).
+     - Prefer generalising an existing CFDS component to inventing a new one.
+     - No !important.
+
+   CFDS is light-only and roughly a dozen of its component rules hardcode
+   background:#fff, so a dark theme is a deliberate non-goal here rather than
+   an oversight.
+   ========================================================================= */
+
+:root {
+    /* CFDS has no spacing scale. These are the only additions, kept small
+       and named so they read as a system rather than magic numbers. */
+    --gap-xs: 6px;
+    --gap-sm: 10px;
+    --gap-md: 16px;
+    --gap-lg: 24px;
+    --gap-xl: 36px;
+
+    /* Categorical series colours. CFDS gives a 10-step sequential brand ramp
+       but nothing for "these are different things". Ordered so the first two
+       carry the most common pairing (views vs visitors) and stay
+       distinguishable in the common forms of colour blindness. */
+    --series-1: var(--brand-500);
+    --series-2: #0f9d8f;
+    --series-3: #b8631a;
+    --series-4: #7a4bd0;
+    --series-5: #2f7d31;
+    --series-6: #b03060;
+
+    --meter-track: var(--ink-100);
+    --meter-fill: var(--brand-200);
+}
+
+/* --------------------------------------------------------------------------
+   App shell
+   -------------------------------------------------------------------------- */
+
+.app-main {
+    /* CFDS .nav is position:sticky at a hardcoded 68px. */
+    padding-block: var(--gap-lg) var(--gap-xl);
+    min-height: calc(100vh - 68px);
+}
+
+.app-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    justify-content: space-between;
+    gap: var(--gap-md);
+    margin-block-end: var(--gap-lg);
+}
+
+.app-head h1 {
+    margin: 0;
+    font-size: clamp(1.5rem, 1.2rem + 1.2vw, 2rem);
+}
+
+.app-head p {
+    margin: var(--gap-xs) 0 0;
+    color: var(--ink-600);
+    font-size: 0.95rem;
+}
+
+.app-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap-sm);
+    align-items: center;
+}
+
+/* --------------------------------------------------------------------------
+   Card - CFDS has feature-card, plugin-card, download-card and so on, but no
+   generic container. This is that idiom extracted.
+   -------------------------------------------------------------------------- */
+
+.card {
+    background: var(--bg);
+    border: 1px solid var(--ink-200);
+    border-radius: var(--r-lg);
+    box-shadow: var(--shadow-xs);
+}
+
+.card + .card {
+    margin-block-start: var(--gap-md);
+}
+
+.card-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap-md);
+    padding: var(--gap-md) var(--gap-lg);
+    border-block-end: 1px solid var(--ink-100);
+}
+
+.card-head h2,
+.card-head h3 {
+    margin: 0;
+    font-family: var(--font-sans);
+    font-size: 0.95rem;
+    font-weight: 650;
+    letter-spacing: 0;
+    color: var(--ink-800);
+}
+
+.card-body {
+    padding: var(--gap-lg);
+}
+
+.card-body--flush {
+    padding: 0;
+}
+
+.grid-cards {
+    display: grid;
+    gap: var(--gap-md);
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 760px) {
+    .grid-cards--2 { grid-template-columns: repeat(2, 1fr); }
+}
+
+@media (min-width: 960px) {
+    .grid-cards--3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* --------------------------------------------------------------------------
+   Data table
+   CFDS styles tables only inside .prose-article. This is the application
+   variant: hoverable rows, sticky header, sortable headers, numeric columns.
+   -------------------------------------------------------------------------- */
+
+.table-wrap {
+    overflow-x: auto;
+    border-radius: var(--r-lg);
+}
+
+.data-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.92rem;
+    line-height: 1.5;
+}
+
+.data-table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--bg-alt);
+    color: var(--ink-700);
+    font-family: var(--font-sans);
+    font-weight: 650;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    text-align: left;
+    padding: var(--gap-sm) var(--gap-md);
+    border-block-end: 1px solid var(--ink-200);
+    white-space: nowrap;
+}
+
+.data-table tbody td {
+    padding: var(--gap-sm) var(--gap-md);
+    border-block-end: 1px solid var(--ink-100);
+    color: var(--ink-700);
+    vertical-align: middle;
+}
+
+.data-table tbody tr:last-child td {
+    border-block-end: 0;
+}
+
+.data-table tbody tr:hover td {
+    background: var(--bg-soft);
+}
+
+/* Numbers line up only if they are right-aligned and tabular. */
+.data-table .num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+    color: var(--ink-800);
+}
+
+.data-table .col-main {
+    width: 100%;
+    min-width: 220px;
+}
+
+.data-table--dense tbody td,
+.data-table--dense thead th {
+    padding-block: var(--gap-xs);
+}
+
+.data-table a {
+    color: var(--ink-900);
+    text-decoration: none;
+}
+
+.data-table a:hover {
+    color: var(--brand-600);
+    text-decoration: underline;
+}
+
+.cell-stack {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.cell-sub {
+    font-size: 0.78rem;
+    color: var(--ink-500);
+}
+
+.cell-actions {
+    display: flex;
+    gap: var(--gap-xs);
+    justify-content: flex-end;
+    white-space: nowrap;
+}
+
+/* --------------------------------------------------------------------------
+   Meter - CFDS's only bar is .tour-progress__bar, a 6.5s autoplay animation.
+   This is the determinate version, driven by --pct.
+   -------------------------------------------------------------------------- */
+
+.meter {
+    position: relative;
+    height: 4px;
+    border-radius: var(--r-full);
+    background: var(--meter-track);
+    overflow: hidden;
+}
+
+.meter__bar {
+    display: block;
+    height: 100%;
+    border-radius: inherit;
+    background: var(--meter-fill);
+    transform-origin: left center;
+    transform: scaleX(var(--pct, 0));
+    transition: transform var(--t-med);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .meter__bar { transition: none; }
+}
+
+/* --------------------------------------------------------------------------
+   Form controls
+   CFDS ships two incompatible input treatments (.support-form descendants and
+   .calc-field). This standardises on the .calc-field treatment and gives it
+   reusable class names.
+   -------------------------------------------------------------------------- */
+
+.field {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+    margin-block-end: var(--gap-md);
+}
+
+.field > label,
+.field-label {
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: var(--ink-700);
+}
+
+.field input[type="text"],
+.field input[type="url"],
+.field input[type="password"],
+.field input[type="number"],
+.field select,
+.field textarea,
+.input,
+.select {
+    width: 100%;
+    padding: 10px 12px;
+    font: inherit;
+    font-size: 0.95rem;
+    color: var(--ink-900);
+    background: var(--bg);
+    border: 1px solid var(--ink-300);
+    border-radius: var(--r-md);
+    transition: border-color var(--t-fast), box-shadow var(--t-fast);
+}
+
+.field input:focus-visible,
+.field select:focus-visible,
+.field textarea:focus-visible,
+.input:focus-visible,
+.select:focus-visible {
+    outline: none;
+    border-color: var(--brand-400);
+    box-shadow: var(--ring);
+}
+
+.field input[aria-invalid="true"],
+.input[aria-invalid="true"] {
+    border-color: var(--danger-500);
+}
+
+.field-hint {
+    font-size: 0.78rem;
+    color: var(--ink-500);
+}
+
+.field-error {
+    font-size: 0.78rem;
+    font-weight: 600;
+    color: var(--danger-500);
+}
+
+.field-row {
+    display: grid;
+    gap: var(--gap-md);
+    grid-template-columns: 1fr;
+}
+
+@media (min-width: 760px) {
+    .field-row--2 { grid-template-columns: repeat(2, 1fr); }
+}
+
+/* Checkbox rows read as one control, not a stray box and a label. */
+.field-check {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--gap-sm);
+    margin-block-end: var(--gap-md);
+}
+
+.field-check input[type="checkbox"] {
+    inline-size: 18px;
+    block-size: 18px;
+    margin-block-start: 2px;
+    accent-color: var(--brand-600);
+    flex: none;
+}
+
+.field-check label {
+    font-size: 0.92rem;
+    color: var(--ink-800);
+}
+
+.field-check .field-hint {
+    display: block;
+    margin-block-start: 2px;
+}
+
+/* Inline toolbar selects (site / interval pickers). */
+.toolbar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--gap-sm);
+    margin-block-end: var(--gap-lg);
+}
+
+.toolbar .select {
+    width: auto;
+    min-width: 150px;
+}
+
+/* CFDS has no disabled button state. */
+.btn[disabled],
+.btn[aria-disabled="true"] {
+    opacity: 0.55;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.btn-danger {
+    background: var(--danger-500);
+    color: #fff;
+    border-color: var(--danger-500);
+}
+
+.btn-danger:hover {
+    filter: brightness(0.94);
+}
+
+/* --------------------------------------------------------------------------
+   Status pills - reuses the roadmap-tag vocabulary, which is the only real
+   status-badge set CFDS ships.
+   -------------------------------------------------------------------------- */
+
+.pill {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--gap-xs);
+    padding: 3px 10px;
+    border-radius: var(--r-full);
+    font-size: 0.72rem;
+    font-weight: 700;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border: 1px solid transparent;
+}
+
+.pill--ok {
+    background: #ecfdf5;
+    color: #047857;
+    border-color: #a7f3d0;
+}
+
+.pill--warn {
+    background: #fef3c7;
+    color: #854d0e;
+    border-color: #fde68a;
+}
+
+.pill--error {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #fecaca;
+}
+
+.pill--muted {
+    background: var(--ink-100);
+    color: var(--ink-700);
+    border-color: var(--ink-200);
+}
+
+.pill--brand {
+    background: var(--brand-50);
+    color: var(--brand-700);
+    border-color: var(--brand-100);
+}
+
+/* --------------------------------------------------------------------------
+   Flash messages
+   -------------------------------------------------------------------------- */
+
+.flash {
+    padding: var(--gap-sm) var(--gap-md);
+    border-radius: var(--r-md);
+    border: 1px solid;
+    font-size: 0.92rem;
+    margin-block-end: var(--gap-md);
+}
+
+.flash--ok {
+    background: #ecfdf5;
+    color: #065f46;
+    border-color: #a7f3d0;
+}
+
+.flash--error {
+    background: #fef2f2;
+    color: #991b1b;
+    border-color: #fecaca;
+}
+
+/* --------------------------------------------------------------------------
+   Empty and loading states
+   -------------------------------------------------------------------------- */
+
+.empty-state {
+    padding: var(--gap-xl) var(--gap-lg);
+    text-align: center;
+    color: var(--ink-500);
+}
+
+.empty-state h3 {
+    margin: 0 0 var(--gap-xs);
+    font-family: var(--font-sans);
+    font-size: 1rem;
+    font-weight: 650;
+    color: var(--ink-700);
+}
+
+.empty-state p {
+    margin: 0 auto var(--gap-md);
+    max-width: 46ch;
+    font-size: 0.92rem;
+}
+
+.is-loading {
+    color: var(--ink-400);
+    font-size: 0.88rem;
+}
+
+/* --------------------------------------------------------------------------
+   Pagination
+   -------------------------------------------------------------------------- */
+
+.pager {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--gap-sm);
+    padding: var(--gap-sm) var(--gap-md);
+    border-block-start: 1px solid var(--ink-100);
+}
+
+.pager__label {
+    font-size: 0.82rem;
+    color: var(--ink-500);
+    margin-inline-end: auto;
+}
+
+/* --------------------------------------------------------------------------
+   KPI tiles - CFDS .calc-result, widened for dashboard use.
+   Values are sans and tabular: the serif is right for headings and wrong for
+   numbers that need to be compared down a column.
+   -------------------------------------------------------------------------- */
+
+.kpis {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--gap-md);
+}
+
+.kpi {
+    padding: var(--gap-md);
+    border-radius: var(--r-lg);
+    background: var(--bg-alt);
+    border: 1px solid var(--ink-100);
+}
+
+.kpi--primary {
+    background: var(--brand-50);
+    border-color: var(--brand-100);
+}
+
+.kpi__value {
+    display: block;
+    font-family: var(--font-sans);
+    font-size: 1.7rem;
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    font-variant-numeric: tabular-nums;
+    color: var(--ink-900);
+}
+
+.kpi--primary .kpi__value {
+    color: var(--brand-700);
+}
+
+.kpi__label {
+    display: block;
+    margin-block-start: 2px;
+    font-size: 0.76rem;
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--ink-500);
+}
+
+.kpi__delta {
+    font-size: 0.78rem;
+    font-weight: 650;
+    font-variant-numeric: tabular-nums;
+}
+
+.kpi__delta--up { color: #047857; }
+.kpi__delta--down { color: var(--danger-500); }
+
+/* --------------------------------------------------------------------------
+   Utilities. Kept to the few that earn their place; anything reused more than
+   a couple of times should become a component instead.
+   -------------------------------------------------------------------------- */
+
+.stack-sm > * + * { margin-block-start: var(--gap-sm); }
+.stack-md > * + * { margin-block-start: var(--gap-md); }
+.stack-lg > * + * { margin-block-start: var(--gap-lg); }
+
+.muted { color: var(--ink-500); }
+.nowrap { white-space: nowrap; }
+.mono {
+    font-family: var(--font-mono);
+    font-size: 0.86em;
+}
+.truncate {
+    max-width: 42ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}

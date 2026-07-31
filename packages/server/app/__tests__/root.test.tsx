@@ -4,23 +4,36 @@ import "vitest-dom/extend-expect";
 import { render, waitFor, screen, cleanup } from "@testing-library/react";
 import { createRoutesStub } from "react-router";
 
-import Root, { Layout } from "../root";
+import Root, { Layout, links } from "../root";
 import * as auth from "~/lib/auth";
 
-// Mock isAuthEnabled to control test behavior
 vi.mock("~/lib/auth", async () => {
     const actual = await vi.importActual("~/lib/auth");
     return {
         ...actual,
-        isAuthEnabled: vi.fn().mockReturnValue(true)
+        isAuthEnabled: vi.fn().mockReturnValue(true),
     };
 });
 
+function stubLoader(overrides: Record<string, unknown> = {}) {
+    return function loader() {
+        return {
+            version: {
+                name: "ABC123",
+                url: null,
+            },
+            origin: "http://example.com",
+            url: "http://example.com/path",
+            user: { authenticated: false },
+            isAuthEnabled: true,
+            ...overrides,
+        };
+    };
+}
+
 describe("Root", () => {
     beforeAll(() => {
-        // not sure what calls scrollTo, but it does get
-        // called in this test - and if we don't mock it this
-        // will throw an exception/warning
+        // Something in the router calls scrollTo; without a stub jsdom warns.
         window.scrollTo = vitest.fn(() => {});
     });
 
@@ -29,65 +42,99 @@ describe("Root", () => {
         vitest.clearAllMocks();
     });
 
-    test("renders without crashing", async () => {
-        function loader() {
-            return {
-                version: {
-                    name: "ABC123",
-                    url: "http://example.com/commit/ABC123",
-                },
-                origin: "http://example.com",
-                url: "http://example.com/path",
-            };
-        }
-
+    test("renders the primary navigation", async () => {
         const RemixStub = createRoutesStub([
-            {
-                path: "/",
-                Component: Root,
-                loader,
-            },
+            { path: "/", Component: Root, loader: stubLoader() },
         ]);
 
         render(<RemixStub />);
-        // wait until the rows render in the document
-        await waitFor(() => screen.findByText("Version"));
+
+        await waitFor(() => screen.getByText("Dashboard"));
+        // "GT Analytics" appears in both the nav brand and the footer, so
+        // match the brand by its class rather than by text.
+        expect(document.querySelector(".nav-brand")).toHaveTextContent(
+            "GT Analytics",
+        );
+        expect(screen.getByText("Dashboard").closest("a")).toHaveAttribute(
+            "href",
+            "/dashboard",
+        );
+        expect(screen.getByText("Sites").closest("a")).toHaveAttribute(
+            "href",
+            "/admin/sites",
+        );
+    });
+
+    test("shows the deployed version", async () => {
+        const RemixStub = createRoutesStub([
+            { path: "/", Component: Root, loader: stubLoader() },
+        ]);
+
+        render(<RemixStub />);
+        await waitFor(() => screen.getByText("ABC123"));
         expect(screen.getByText("ABC123")).toBeInTheDocument();
     });
 
-    test("renders logout button when user is authenticated", async () => {
-        // Mock isAuthEnabled to return true for this test
+    test("renders a log out link when the user is authenticated", async () => {
         vi.mocked(auth.isAuthEnabled).mockReturnValue(true);
-        
-        function loader() {
-            return {
-                version: {
-                    name: "ABC123",
-                    url: "http://example.com/commit/ABC123",
-                },
-                origin: "http://example.com",
-                url: "http://example.com/path",
-                user: { authenticated: true },
-                isAuthEnabled: true
-            };
-        }
 
         const RemixStub = createRoutesStub([
             {
                 path: "/",
                 Component: Root,
-                loader,
+                loader: stubLoader({
+                    user: { authenticated: true },
+                    isAuthEnabled: true,
+                }),
             },
         ]);
 
         render(<RemixStub />);
-        
+
         await waitFor(() => screen.getByText("ABC123"));
-        
-        const logoutLink = screen.getByText("Logout");
-        expect(logoutLink).toBeInTheDocument();
-        expect(logoutLink.closest("a")).toHaveAttribute("href", "/logout");
-        expect(logoutLink.closest("a")).toHaveClass("ml-2");
+        const logout = screen.getByText("Log out");
+        expect(logout.closest("a")).toHaveAttribute("href", "/logout");
+    });
+
+    test("hides the log out link when auth is disabled", async () => {
+        const RemixStub = createRoutesStub([
+            {
+                path: "/",
+                Component: Root,
+                loader: stubLoader({
+                    user: { authenticated: true },
+                    isAuthEnabled: false,
+                }),
+            },
+        ]);
+
+        render(<RemixStub />);
+
+        await waitFor(() => screen.getByText("ABC123"));
+        expect(screen.queryByText("Log out")).not.toBeInTheDocument();
+    });
+});
+
+describe("links", () => {
+    test("loads the Core Forms Design System and its extension layer", () => {
+        const hrefs = links().map((link) => (link as { href: string }).href);
+
+        expect(hrefs).toContain("/design-system/core-forms.css");
+        expect(hrefs).toContain("/design-system/core-forms-dashboard.css");
+    });
+
+    test("preloads the Inter variable font", () => {
+        // Without the preload the first paint falls back to system sans and
+        // visibly reflows once Inter arrives.
+        const preload = links().find(
+            (link) => (link as { rel: string }).rel === "preload",
+        ) as Record<string, string> | undefined;
+
+        expect(preload).toBeDefined();
+        expect(preload?.href).toBe("/design-system/fonts/inter-vf-latin.woff2");
+        expect(preload?.as).toBe("font");
+        // A font preload without crossorigin is fetched twice by the browser.
+        expect(preload?.crossOrigin).toBe("anonymous");
     });
 });
 
@@ -101,61 +148,55 @@ describe("Layout", () => {
         vitest.clearAllMocks();
     });
 
-    test("renders with default data when no route data is available", async () => {
+    test("renders the viewport meta tag", async () => {
         const RemixStub = createRoutesStub([
             {
                 path: "/",
-                // @ts-expect-error TODO: Figure out how t
+                // @ts-expect-error Layout renders <html>, which the stub types
+                // do not model.
                 Component: Layout,
-                // loader intentionally omitted
             },
         ]);
 
-        // note: this will render an <html> element into a <div>,
-        // which will trigger a warning in the console
-        //
-        // "Warning: validateDOMNesting(...): <html> cannot appear as a child of <div>."
-
+        // Note: this renders an <html> element into a <div>, which warns.
         await waitFor(() => render(<RemixStub />));
 
-        // Check for important meta tags
-        const viewport = document.querySelector('meta[name="viewport"]');
-        expect(viewport).toHaveAttribute(
+        expect(document.querySelector('meta[name="viewport"]')).toHaveAttribute(
             "content",
             "width=device-width, initial-scale=1",
         );
     });
 
-    test("renders with provided route data", async () => {
-        function loader() {
-            return {
-                version: "v1.2.3",
-                origin: "test.counterscale.dev",
-                url: "https://test.counterscale.dev/",
-            };
-        }
-
+    test("keeps the dashboard out of search indexes", async () => {
         const RemixStub = createRoutesStub([
             {
                 path: "/",
-                // @ts-expect-error TODO: Figure out how to type this
+                // @ts-expect-error see above
                 Component: Layout,
-                loader,
             },
         ]);
 
-        render(<RemixStub />);
+        await waitFor(() => render(<RemixStub />));
 
-        await waitFor(() =>
-            expect(
-                document.querySelector('meta[property="og:url"]'),
-            ).toBeInTheDocument(),
-        );
-
-        const meta = document.querySelector('meta[property="og:url"]');
-        expect(meta).toHaveAttribute(
+        expect(document.querySelector('meta[name="robots"]')).toHaveAttribute(
             "content",
-            "https://test.counterscale.dev/",
+            "noindex",
         );
+    });
+
+    test("renders a skip link as the first focusable element", async () => {
+        const RemixStub = createRoutesStub([
+            {
+                path: "/",
+                // @ts-expect-error see above
+                Component: Layout,
+            },
+        ]);
+
+        await waitFor(() => render(<RemixStub />));
+
+        const skip = document.querySelector('a[href="#main"]');
+        expect(skip).toBeInTheDocument();
+        expect(skip).toHaveClass("visually-hidden");
     });
 });
