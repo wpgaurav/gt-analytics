@@ -1,0 +1,71 @@
+name: deploy
+
+# Push to main deploys the Worker, but only after build, lint, typecheck and
+# tests pass in this same job.
+#
+# Upstream shipped this as a separate workflow triggered by
+# `workflow_run: { workflows: [ci], types: [completed] }` with no check on
+# `conclusion`. "completed" includes "failure", so that pipeline deployed even
+# when CI had just gone red. Running the gate and the deploy in one job removes
+# the failure mode rather than patching it.
+
+on:
+    push:
+        branches: [main]
+    workflow_dispatch:
+
+# Never let two pushes deploy the same Worker concurrently. Don't cancel a
+# deploy already in flight -- a half-applied deploy is worse than a slow one.
+concurrency:
+    group: deploy-worker
+    cancel-in-progress: false
+
+jobs:
+    deploy:
+        runs-on: ubuntu-latest
+        timeout-minutes: 20
+        steps:
+            - uses: actions/checkout@v4
+
+            - uses: pnpm/action-setup@v4
+
+            - uses: actions/setup-node@v4
+              with:
+                  node-version-file: "package.json"
+                  cache: pnpm
+
+            - name: Install dependencies
+              run: pnpm install --frozen-lockfile
+
+            # The tracker's test-ci runs `playwright test`, which needs real
+            # browsers. Without this the gate fails before it ever reaches the
+            # deploy step.
+            - name: Install Playwright browsers
+              run: cd packages/tracker && pnpm playwright install --with-deps
+
+            - name: Build, lint, typecheck and test
+              run: pnpm turbo build lint typecheck test-ci --concurrency=1
+
+            - name: Deploy to Cloudflare
+              uses: cloudflare/wrangler-action@v3
+              with:
+                  apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+                  accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+                  workingDirectory: packages/server
+                  # Stamps the deployed build with the commit it came from, so
+                  # the dashboard footer identifies exactly what is running.
+                  command: deploy --config wrangler.json --var VERSION:${{ github.sha }}
+
+            - name: Verify the deployment answers
+              run: |
+                  for attempt in 1 2 3 4 5; do
+                      code=$(curl -s -o /dev/null -w '%{http_code}' https://stats.gauravtiwari.org/tracker.js || true)
+                      echo "attempt $attempt: tracker.js -> $code"
+                      if [ "$code" = "200" ]; then
+                          echo "Deployment verified."
+                          exit 0
+                      fi
+                      sleep 10
+                  done
+                  echo "::error::stats.gauravtiwari.org did not serve tracker.js after deploy"
+                  exit 1

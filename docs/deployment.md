@@ -1,67 +1,87 @@
 # Deployment
 
 The Worker `counterscale-gauravtiwari` (custom domain `stats.gauravtiwari.org`) is deployed by
-**Cloudflare Workers Builds**, connected directly to the private repo `wpgaurav/gt-analytics`.
-Pushing to `main` builds and deploys.
+**GitHub Actions** from this private repo. Pushing to `main` runs the full gate — build, lint,
+typecheck, tests — and deploys only if all of it passes.
 
-## Workers Builds configuration
+Workflow: [`.github/workflows/deploy.yaml`](../.github/workflows/deploy.yaml).
 
-Set these in the Cloudflare dashboard under
-**Workers & Pages → counterscale-gauravtiwari → Settings → Build**:
+## Why not Cloudflare Workers Builds
 
-| Setting | Value |
+Connecting a Worker to a **private** repository requires installing the *Cloudflare Workers and
+Pages* GitHub App and authorising it — OAuth flows on github.com and dash.cloudflare.com that
+cannot be driven from the API or CLI. GitHub Actions needs no browser step and keeps the deploy
+gate in the same place as the tests. Workers Builds remains available later if the dashboard
+view is ever wanted; the two must not both be connected, or they will race to deploy the same
+commit.
+
+### The upstream workflow had a real bug
+
+Upstream's `cd.yaml` triggered on:
+
+```yaml
+workflow_run:
+    workflows: [ci]
+    types: [completed]
+```
+
+`completed` includes `failure`, and there was no check on
+`github.event.workflow_run.conclusion`. That pipeline deployed even when CI had just gone red.
+`cd.yaml` is deleted; the gate and the deploy now live in one job, so a failing test cannot be
+followed by a deploy.
+
+## Secrets and configuration
+
+Two GitHub repository secrets drive the deploy:
+
+| Secret | Contents |
 |---|---|
-| Repository | `wpgaurav/gt-analytics` (private) |
-| Branch | `main` |
-| Root directory | `/` — **not** `packages/server`. Turbo and the pnpm workspace resolve from the repo root; pointing at the server package breaks `pnpm install`. |
-| Build command | `pnpm build` |
-| Deploy command | `pnpm --filter @counterscale/server exec wrangler deploy --config packages/server/wrangler.json --var VERSION:$WORKERS_CI_COMMIT_SHA` |
-| Build variables | none required — `pnpm` and Node 20+ are detected from `package.json` |
+| `CLOUDFLARE_API_TOKEN` | Scoped API token, id `4b1b4e11…`, named *gt-analytics GitHub Actions deploy* |
+| `CLOUDFLARE_ACCOUNT_ID` | The Cloudflare account the Worker lives in |
 
-`WORKERS_CI_COMMIT_SHA` is injected by Workers Builds and is what stamps the deployed version,
-replacing the `git rev-parse HEAD` the local deploy script uses.
+The token is deliberately least-privilege — it can deploy this Worker and touch the bindings the
+project uses, and nothing else:
 
-### Why the GitHub Actions deploy was removed
+- Account: **Workers Scripts Write**, **Workers KV Storage Write**, **Workers R2 Storage Write**,
+  **D1 Write**, **Account Settings Read**
+- Zone `gauravtiwari.org`: **Workers Routes Write** (for the `stats.` custom domain)
 
-Upstream shipped `.github/workflows/cd.yaml`, which deployed via `cloudflare/wrangler-action`.
-With Workers Builds connected, both pipelines would deploy the same Worker from the same commit
-and race each other. `cd.yaml` is deleted; `ci.yaml` (lint, typecheck, tests) is kept.
-
-## One-time setup — requires a browser
-
-Connecting a Worker to a **private** repository means installing the *Cloudflare Workers and
-Pages* GitHub App and granting it access to that repo. Both halves are OAuth authorisation
-flows on github.com and dash.cloudflare.com, so they cannot be done from the API or CLI.
-
-1. Cloudflare dashboard → **Workers & Pages → counterscale-gauravtiwari → Settings → Build →
-   Connect**.
-2. Choose **GitHub**, authorise the Cloudflare Workers and Pages app.
-3. On the GitHub install screen choose **Only select repositories** and pick
-   `wpgaurav/gt-analytics`. Granting access to all repositories is not required.
-4. Back on Cloudflare, select the repo and branch and fill in the table above.
-
-After the first connected build, verify:
+It has no DNS, no zone-settings, no billing, and no account-write access. To roll it, create a
+replacement in the Cloudflare dashboard under **My Profile → API Tokens**, then:
 
 ```bash
-curl -s -o /dev/null -w '%{http_code}\n' https://stats.gauravtiwari.org/
+gh secret set CLOUDFLARE_API_TOKEN --repo wpgaurav/gt-analytics
 ```
 
-## Manual deploy
+### Runtime secrets are separate
 
-Still available, and the fallback if a build fails. Always use the workspace binary — a bare
-`wrangler` is not on PATH:
-
-```bash
-pnpm --filter @counterscale/server exec wrangler deploy --config wrangler.json
-```
-
-## Secrets
-
-Workers Builds deploys code; it does not manage secrets. These are set once per environment with
-`wrangler secret put` and persist across deploys:
+GitHub Actions deploys code; it does not manage the Worker's own secrets. These are set once
+with `wrangler secret put` and persist across deploys:
 
 `CF_ACCOUNT_ID`, `CF_BEARER_TOKEN`, `CF_PASSWORD_HASH`, `CF_JWT_SECRET`, `CF_AUTH_ENABLED`,
 `CF_STORAGE_ENABLED`, `CF_API_TOKEN`.
 
 Non-secret configuration (`CF_AE_DATASET`, `VERSION`) lives in `wrangler.json` under `vars` and
-is deployed with the code.
+ships with the code.
+
+> `CF_AE_DATASET` must match the `analytics_engine_datasets` binding in `wrangler.json`. When
+> they drift, writes go to one dataset and reads to another, and every query returns zero rows
+> with no error. `app/analytics/__tests__/dataset.test.ts` exists to catch exactly that.
+
+## Manual deploy
+
+The fallback if Actions is unavailable. Always use the workspace binary — a bare `wrangler` is
+not on PATH:
+
+```bash
+pnpm --filter @counterscale/server exec wrangler deploy --config wrangler.json
+```
+
+## Verifying a deploy
+
+The workflow polls `https://stats.gauravtiwari.org/tracker.js` and fails the run if it does not
+return 200 within ~50 seconds. To check by hand:
+
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' https://stats.gauravtiwari.org/tracker.js
+```
