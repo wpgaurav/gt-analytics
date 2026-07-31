@@ -116,26 +116,14 @@ export default function Realtime() {
                 </div>
             </header>
 
-            <div className="toolbar">
-                <label className="visually-hidden" htmlFor="rt-site">
-                    Site
-                </label>
-                <select
-                    id="rt-site"
-                    className="select"
-                    value={activeSite}
-                    onChange={(e) => {
-                        document.cookie = `${SITE_COOKIE_NAME}=${encodeURIComponent(e.target.value)}; Path=/; Max-Age=31536000; SameSite=Lax`;
-                        setSearchParams({ site: e.target.value });
-                    }}
-                >
-                    {sites.map((s: Site) => (
-                        <option key={s.site_id} value={s.site_id}>
-                            {s.label}
-                        </option>
-                    ))}
-                </select>
-            </div>
+            <SiteTabs
+                sites={sites}
+                activeSite={activeSite}
+                onSelect={(nextSite) => {
+                    document.cookie = `${SITE_COOKIE_NAME}=${encodeURIComponent(nextSite)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+                    setSearchParams({ site: nextSite });
+                }}
+            />
 
             {!configured ? (
                 <div className="card">
@@ -461,4 +449,94 @@ function relativeTime(then: number, now: number): string {
     if (seconds < 5) return "now";
     if (seconds < 60) return `${seconds}s`;
     return `${Math.floor(seconds / 60)}m`;
+}
+
+const SITES_PER_PAGE = 10;
+
+/**
+ * Every site laid out at once instead of hidden behind a select.
+ *
+ * Real-time is a glance-at-it screen: which site is busy right now is the
+ * question, and a dropdown makes that a click per site. Paged at ten because
+ * beyond that the row wraps into a wall and stops being scannable.
+ */
+function SiteTabs({
+    sites,
+    activeSite,
+    onSelect,
+}: {
+    sites: Site[];
+    activeSite: string;
+    onSelect: (siteId: string) => void;
+}) {
+    const pageCount = Math.max(1, Math.ceil(sites.length / SITES_PER_PAGE));
+
+    // Open on the page holding the current site, not page one -- otherwise
+    // selecting site 12 immediately hides it.
+    const activeIndex = sites.findIndex((s) => s.site_id === activeSite);
+    const [page, setPage] = useState(
+        activeIndex === -1 ? 0 : Math.floor(activeIndex / SITES_PER_PAGE),
+    );
+
+    const start = page * SITES_PER_PAGE;
+    const visible = sites.slice(start, start + SITES_PER_PAGE);
+
+    if (sites.length === 0) {
+        return (
+            <div className="toolbar">
+                <p className="site-tabs__empty">
+                    No sites yet. Add one under Sites.
+                </p>
+            </div>
+        );
+    }
+
+    return (
+        <div className="site-tabs">
+            <div className="site-tabs__list" role="tablist" aria-label="Site">
+                {visible.map((s: Site) => (
+                    <button
+                        key={s.site_id}
+                        type="button"
+                        role="tab"
+                        aria-selected={s.site_id === activeSite}
+                        className={
+                            s.site_id === activeSite
+                                ? "site-tab is-active"
+                                : "site-tab"
+                        }
+                        onClick={() => onSelect(s.site_id)}
+                    >
+                        {s.label}
+                    </button>
+                ))}
+            </div>
+
+            {pageCount > 1 && (
+                <div className="site-tabs__pager">
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={page === 0}
+                        onClick={() => setPage((p) => Math.max(0, p - 1))}
+                    >
+                        Previous
+                    </button>
+                    <span className="site-tabs__count">
+                        {page + 1} of {pageCount}
+                    </span>
+                    <button
+                        type="button"
+                        className="btn btn-ghost btn-sm"
+                        disabled={page >= pageCount - 1}
+                        onClick={() =>
+                            setPage((p) => Math.min(pageCount - 1, p + 1))
+                        }
+                    >
+                        Next
+                    </button>
+                </div>
+            )}
+        </div>
+    );
 }

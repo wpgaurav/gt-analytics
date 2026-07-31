@@ -1477,3 +1477,73 @@
         grid-template-columns: 1fr;
     }
 }
+
+/* ---------------------------------------------------------------------------
+   Site tabs (real-time)
+
+   Every site visible at once. Real-time is a glance-at-it screen, and a
+   dropdown turns "which site is busy" into a click per site.
+   --------------------------------------------------------------------------- */
+
+.site-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--gap-sm);
+}
+
+.site-tabs__list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.site-tab {
+    padding: 7px 14px;
+    font: inherit;
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--ink-600);
+    background: var(--bg);
+    border: 1px solid var(--ink-200);
+    /* 4px, matching every other button. Never a pill. */
+    border-radius: var(--r-xs);
+    cursor: pointer;
+    transition: color var(--t-fast), border-color var(--t-fast),
+        background-color var(--t-fast);
+}
+
+.site-tab:hover {
+    color: var(--ink-900);
+    border-color: var(--ink-300);
+}
+
+.site-tab:focus-visible {
+    outline: none;
+    border-color: var(--brand-400);
+    box-shadow: var(--ring);
+}
+
+.site-tab.is-active {
+    color: var(--brand-700);
+    background: var(--brand-50);
+    border-color: var(--brand-300);
+}
+
+.site-tabs__pager {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.site-tabs__count {
+    font-size: 0.82rem;
+    color: var(--ink-500);
+    font-variant-numeric: tabular-nums;
+}
+
+.site-tabs__empty {
+    font-size: 0.9rem;
+    color: var(--ink-500);
+}
