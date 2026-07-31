@@ -40,18 +40,19 @@ describe("Index route", () => {
         // Check if component renders at all
         expect(container).toBeInTheDocument();
 
-        // Wait for content to load
+        // Wait for content to load. Both the heading and the submit button
+        // read "Sign in", so match on role.
         await waitFor(() => {
             expect(
-                screen.getByText("Welcome to Counterscale"),
+                screen.getByRole("heading", { name: "Sign in" }),
             ).toBeInTheDocument();
         });
 
         expect(
-            screen.getByText("Enter your password to access the dashboard"),
+            screen.getByText("Enter the dashboard password to continue."),
         ).toBeInTheDocument();
 
-        expect(screen.getByText("Sign In")).toBeInTheDocument();
+        expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
     });
 
     test("renders authenticated state", async () => {
@@ -70,18 +71,18 @@ describe("Index route", () => {
 
         await waitFor(() => {
             expect(
-                screen.getByText("Welcome to Counterscale"),
+                screen.getByText("You're signed in"),
             ).toBeInTheDocument();
         });
 
         expect(
-            screen.getByText("Continue to access your analytics dashboard."),
+            screen.getByText("Continue to the dashboard."),
         ).toBeInTheDocument();
 
-        expect(screen.getByText("Go to Dashboard")).toBeInTheDocument();
+        expect(screen.getByText("Go to dashboard")).toBeInTheDocument();
 
         expect(
-            screen.getByRole("link", { name: "Go to Dashboard" }),
+            screen.getByRole("link", { name: "Go to dashboard" }),
         ).toHaveAttribute("href", "/dashboard");
     });
 });

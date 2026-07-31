@@ -9,6 +9,7 @@ import {
 } from "react-router";
 
 import { requireAuth } from "~/lib/auth";
+import { requireApiAuth } from "~/lib/api-auth";
 import {
     deleteSite,
     listSites,
@@ -31,7 +32,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    await requireApiAuth(request, context.cloudflare.env);
 
     const env = context.cloudflare.env;
     const form = await request.formData();

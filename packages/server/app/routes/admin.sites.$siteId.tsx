@@ -12,6 +12,7 @@ import {
 
 import SiteForm from "~/components/SiteForm";
 import { requireAuth } from "~/lib/auth";
+import { requireApiAuth } from "~/lib/api-auth";
 import {
     deleteSite,
     getSite,
@@ -61,7 +62,7 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, params, request }: ActionFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    await requireApiAuth(request, context.cloudflare.env);
 
     const env = context.cloudflare.env;
     const siteId = params.siteId!;

@@ -80,6 +80,28 @@
     align-items: center;
 }
 
+/* Sign-in: a single centred card, no nav chrome around it. */
+.signin {
+    max-width: 420px;
+    margin-block-start: clamp(var(--gap-lg), 8vh, 96px);
+}
+
+.signin__head {
+    margin-block-end: var(--gap-lg);
+    text-align: center;
+}
+
+.signin__head h1 {
+    margin-block: var(--gap-xs) var(--gap-sm);
+    font-size: 1.75rem;
+}
+
+.signin__head p {
+    margin: 0;
+    color: var(--ink-600);
+    font-size: 0.95rem;
+}
+
 /* --------------------------------------------------------------------------
    Card - CFDS has feature-card, plugin-card, download-card and so on, but no
    generic container. This is that idiom extracted.
