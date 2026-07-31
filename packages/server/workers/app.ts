@@ -14,6 +14,9 @@ import { getLoadContext } from "../app/load-context";
 import * as build from "../build/server";
 import { extractAsArrow } from "./lib/arrow";
 
+// Durable Object classes must be exported from the Worker entry point.
+export { RealtimeSite } from "./realtime";
+
 const requestHandler = createRequestHandler(build as unknown as ServerBuild);
 
 export default {

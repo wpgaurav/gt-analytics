@@ -10,5 +10,6 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         request,
         context.cloudflare.env,
         context.cloudflare.cf,
+        context.cloudflare.ctx,
     );
 }

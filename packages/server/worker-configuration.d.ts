@@ -22,6 +22,10 @@ declare namespace Cloudflare {
 		WEB_COUNTER_AE: AnalyticsEngineDataset;
 		/** Custom events and conversions. */
 		EVENTS_AE: AnalyticsEngineDataset;
+		/** Per-site real-time window. Optional: without it realtime degrades. */
+		REALTIME?: DurableObjectNamespace;
+		/** Salt for the ephemeral visitor key. Falls back to CF_JWT_SECRET. */
+		CF_REALTIME_SALT?: string;
 		ASSETS: Fetcher;
 		/** Tracked sites: id, label, base URL used to build report links. */
 		SITES_DB: D1Database;

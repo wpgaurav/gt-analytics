@@ -97,6 +97,175 @@
 }
 
 /* --------------------------------------------------------------------------
+   Icons. Font Awesome Pro paths inlined as SVG; they inherit colour from the
+   parent, so they never need their own.
+   -------------------------------------------------------------------------- */
+
+.icon {
+    display: inline-block;
+    flex: none;
+    vertical-align: -0.125em;
+}
+
+/* Nav links carry a leading icon; keep the pair on one baseline. */
+.nav .nav-links a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.nav .nav-links a .icon {
+    color: var(--ink-400);
+}
+
+.nav .nav-links a.is-active .icon {
+    color: var(--brand-500);
+}
+
+.icon--inline {
+    color: var(--ink-400);
+    margin-inline-end: 2px;
+}
+
+/* --------------------------------------------------------------------------
+   Real-time
+   -------------------------------------------------------------------------- */
+
+.live-pill {
+    gap: var(--gap-xs);
+}
+
+.live-dot {
+    inline-size: 7px;
+    block-size: 7px;
+    border-radius: var(--r-full);
+    background: currentColor;
+    animation: live-pulse 2s ease-in-out infinite;
+}
+
+@keyframes live-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.25; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .live-dot { animation: none; }
+}
+
+.kpi__icon {
+    display: block;
+    color: var(--ink-400);
+    margin-block-end: var(--gap-xs);
+}
+
+.kpi--primary .kpi__icon {
+    color: var(--brand-400);
+}
+
+.kpi__hint {
+    display: block;
+    margin-block-start: var(--gap-xs);
+    font-size: 0.72rem;
+    color: var(--ink-500);
+}
+
+/* Per-minute activity. Bars scale off --h (0..1) rather than a fixed height,
+   so an empty minute is a visible gap instead of a missing column. */
+.sparkline {
+    display: flex;
+    align-items: flex-end;
+    gap: 2px;
+    block-size: 80px;
+}
+
+.sparkline__bar {
+    flex: 1;
+    min-inline-size: 3px;
+    block-size: calc(max(var(--h, 0) * 100%, 2px));
+    background: var(--brand-300);
+    border-radius: var(--r-xs) var(--r-xs) 0 0;
+    transition: block-size var(--t-med);
+}
+
+.sparkline__bar:last-child {
+    background: var(--brand-500);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sparkline__bar { transition: none; }
+}
+
+/* Live feed */
+.feed {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.feed__item {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--gap-sm);
+    padding: var(--gap-xs) var(--gap-md);
+    border-block-end: 1px solid var(--ink-100);
+    font-size: 0.88rem;
+}
+
+@media (min-width: 760px) {
+    .feed__item {
+        grid-template-columns: 20px minmax(0, 1fr) 160px 40px 48px;
+    }
+}
+
+.feed__item:last-child {
+    border-block-end: 0;
+}
+
+.feed__item--conversion {
+    background: var(--brand-50);
+}
+
+.feed__icon {
+    color: var(--ink-400);
+    display: flex;
+}
+
+.feed__item--conversion .feed__icon {
+    color: var(--brand-600);
+}
+
+.feed__main a {
+    color: var(--ink-900);
+    text-decoration: none;
+}
+
+.feed__main a:hover {
+    color: var(--brand-600);
+    text-decoration: underline;
+}
+
+.feed__meta {
+    font-size: 0.78rem;
+    color: var(--ink-500);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* Secondary columns would crowd a phone; the path and age carry the meaning. */
+@media (max-width: 759px) {
+    .feed__meta { display: none; }
+}
+
+.feed__time {
+    font-size: 0.76rem;
+    color: var(--ink-400);
+    font-variant-numeric: tabular-nums;
+    text-align: end;
+}
+
+/* --------------------------------------------------------------------------
    Code block with a copy button. CFDS styles <pre> inside .prose-article
    only, and this needs a header row regardless.
    -------------------------------------------------------------------------- */

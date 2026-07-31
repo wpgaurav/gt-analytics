@@ -2,6 +2,10 @@ import { LoaderFunctionArgs } from "react-router";
 
 import { buildEventDataPoint, writeEventDataPoint } from "~/analytics/events";
 import { extractParamsFromQueryString } from "~/analytics/collect";
+import {
+    pushRealtimeHit,
+    visitorKey,
+} from "~/analytics/realtime-client";
 
 /**
  * /collect/event -- custom events and conversions.
@@ -26,7 +30,35 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         });
     }
 
-    writeEventDataPoint(context.cloudflare.env.EVENTS_AE, result);
+    const env = context.cloudflare.env;
+    writeEventDataPoint(env.EVENTS_AE, result);
+
+    // Conversions show up in the live feed too -- seeing one land is the whole
+    // appeal of a real-time view.
+    if (context.cloudflare.ctx && env.REALTIME) {
+        context.cloudflare.ctx.waitUntil(
+            visitorKey(
+                result.siteId,
+                request,
+                env.CF_REALTIME_SALT || env.CF_JWT_SECRET || "gt-analytics",
+            )
+                .then((visitor) =>
+                    pushRealtimeHit(env.REALTIME, {
+                        siteId: result.siteId,
+                        visitor,
+                        path: result.path,
+                        channel: result.channel,
+                        referrerHost: result.referrerHost,
+                        country: result.country,
+                        kind: result.type,
+                        name: result.name,
+                    }),
+                )
+                .catch((error) => {
+                    console.error("realtime fan-out failed", error);
+                }),
+        );
+    }
 
     // 204 rather than the pageview collector's GIF: nothing embeds this as an
     // image, and an empty body is cheaper than a pixel.

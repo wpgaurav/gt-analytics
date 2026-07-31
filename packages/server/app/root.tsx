@@ -11,6 +11,7 @@ import {
     useLoaderData,
 } from "react-router";
 import { getUser, isAuthEnabled } from "~/lib/auth";
+import Icon from "~/components/Icon";
 
 /**
  * The Core Forms Design System is served as static assets rather than imported
@@ -115,7 +116,17 @@ export default function App() {
                                 isActive ? "is-active" : undefined
                             }
                         >
+                            <Icon name="gauge-high" size={14} />
                             Dashboard
+                        </NavLink>
+                        <NavLink
+                            to="/realtime"
+                            className={({ isActive }) =>
+                                isActive ? "is-active" : undefined
+                            }
+                        >
+                            <Icon name="bolt" size={14} />
+                            Real-time
                         </NavLink>
                         <NavLink
                             to="/admin/sites"
@@ -123,6 +134,7 @@ export default function App() {
                                 isActive ? "is-active" : undefined
                             }
                         >
+                            <Icon name="browser" size={14} />
                             Sites
                         </NavLink>
                     </div>

@@ -28,3 +28,8 @@ It bundles two typefaces, both under the SIL Open Font License 1.1:
 
 Their license text ships alongside the fonts in
 `packages/server/public/design-system/`.
+
+Icons are **Font Awesome Pro 7.2.0** (`regular` weight), used under Fonticons,
+Inc.'s Commercial License. Only the twenty icons actually rendered are vendored,
+inlined as path data in `packages/server/app/components/icon-paths.ts`. The full
+icon set is not redistributed with this repository.

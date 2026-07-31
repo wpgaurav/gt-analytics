@@ -4,6 +4,7 @@ import {
     detectClickId,
     referrerHost,
 } from "./referrer";
+import { pushRealtimeHit, visitorKey } from "./realtime-client";
 import { IDevice, UAParser } from "ua-parser-js";
 import { maskBrowserVersion } from "~/lib/utils";
 
@@ -139,6 +140,9 @@ export function collectRequestHandler(
     request: Request,
     env: Env,
     extra: Record<string, string> = {}, // extra request properties (i.e. Cloudflare properties)
+    // Passed so the real-time fan-out can run after the response is sent.
+    // Without it the pixel would wait on a Durable Object round trip.
+    ctx?: { waitUntil: (promise: Promise<unknown>) => void },
 ) {
     const params = extractParamsFromQueryString(request.url);
 
@@ -239,6 +243,33 @@ export function collectRequestHandler(
     }
 
     writeDataPoint(env.WEB_COUNTER_AE, data);
+
+    // Fan out to the real-time object after responding. Analytics Engine is
+    // the system of record; this is a convenience view, so a failure here must
+    // never delay or fail the pixel.
+    if (ctx && env.REALTIME) {
+        ctx.waitUntil(
+            visitorKey(
+                siteId,
+                request,
+                env.CF_REALTIME_SALT || env.CF_JWT_SECRET || "gt-analytics",
+            )
+                .then((visitor) =>
+                    pushRealtimeHit(env.REALTIME, {
+                        siteId,
+                        visitor,
+                        path: data.path,
+                        channel: data.channel,
+                        referrerHost: data.referrerHost,
+                        country: data.country,
+                        kind: "pageview",
+                    }),
+                )
+                .catch((error) => {
+                    console.error("realtime fan-out failed", error);
+                }),
+        );
+    }
 
     // encode 1x1 transparent gif
     const gif = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";

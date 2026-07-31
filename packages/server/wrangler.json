@@ -49,5 +49,21 @@
         "crons": [
             "0 2 * * *"
         ]
-    }
+    },
+    "durable_objects": {
+        "bindings": [
+            {
+                "name": "REALTIME",
+                "class_name": "RealtimeSite"
+            }
+        ]
+    },
+    "migrations": [
+        {
+            "tag": "v1",
+            "new_classes": [
+                "RealtimeSite"
+            ]
+        }
+    ]
 }
