@@ -1,11 +1,10 @@
 # GT Analytics
 
-Self-hosted, WordPress-aware web analytics running on Cloudflare Workers.
+Self-hosted, cookieless web analytics running on Cloudflare Workers.
 
 A hard fork of [Counterscale](https://github.com/benvinegar/counterscale) 3.4.1 that keeps the
-edge-collection core and adds the thing Counterscale has no concept of: **a post**. Every hit is
-joined to a real WordPress post ID at collection time, so the dashboard reports on content —
-titles, post types, categories, authors, publish cohorts — instead of bare URL paths.
+edge-collection core and adds what it lacked: real referral attribution, conversion tracking, and
+a dashboard that links straight back to the page it is reporting on.
 
 Deployed as the Cloudflare Worker `counterscale-gauravtiwari` at `stats.gauravtiwari.org`.
 
@@ -13,16 +12,16 @@ Deployed as the Cloudflare Worker `counterscale-gauravtiwari` at `stats.gauravti
 
 | | |
 |---|---|
-| **Post-ID matching** | A scheduled job mirrors the WordPress REST API into D1 and projects a path→post index into KV. The collector resolves it in-isolate and writes the post ID straight into Analytics Engine, so grouping by post, type, category or author is a native `GROUP BY` with no join. |
-| **Four sites, one dashboard** | gauravtiwari.org, gatilab.com, anantamias.com, thedewlab.com. |
-| **Affiliate click tracking** | `/go/{slug}` links are 301s, so server-side analytics never sees them. The tracker captures the click and joins it to the product. |
-| **Content decay + cohorts** | Window-over-window deltas per post: what is dying, what is ramping, how content performs by age, category and author. |
-| **Engagement signals** | Scroll depth and engaged-time, recorded to a separate events dataset. |
+| **Referral attribution** | Upstream stored the raw referrer string and nothing else. This derives a normalised source host, a channel, and any ad-platform click ID at collection time — so `google.com` and `www.google.com` stop splitting, AI assistants are their own bucket, and traffic whose referrer was stripped is still attributable. |
+| **First-touch sessions** | Without it only a session's landing page carries a referrer and everything after it looks like direct traffic. The origin is remembered per tab in `sessionStorage`. |
+| **Conversions** | `gta('conversion', 'signup', { value: 4900, currency: 'INR' })`. Sent with `sendBeacon`, so it survives the page unloading. Recorded to a separate events dataset. |
+| **Multiple sites** | Managed in the UI, not in config. Adding one needs no redeploy. |
+| **Clickable reports** | Every recorded path links back to the live page. |
 | **Core Forms Design System** | The dashboard is dressed in [CFDS](https://github.com/wpgaurav/core-forms-design-system) — no Tailwind, no shadcn. |
 
-**Zero WordPress plugin code is required for collection.** The content map is built entirely
-Worker-side from the public REST API. An optional read-only mu-plugin surfaces view counts in
-wp-admin, but nothing about data capture depends on it.
+**No plugin, no cookies, no cross-session identifier.** Visits are counted with a rotating cache
+header. Click IDs are stored by *name* (`gclid`), never by value, because the value identifies an
+individual click.
 
 ## Layout
 
@@ -64,6 +63,7 @@ Secrets are Wrangler secrets, never committed. `.dev.vars` is gitignored; copy
 | `CF_ACCOUNT_ID` | Cloudflare account |
 | `CF_BEARER_TOKEN` | scoped Account Analytics Read token |
 | `CF_AE_DATASET` | Analytics Engine dataset the SQL layer reads from |
+| `CF_EVENTS_DATASET` | Analytics Engine dataset holding conversions and custom events |
 | `CF_AUTH_ENABLED` | `true` / `false`; unset means enabled when hash + secret both exist |
 | `CF_PASSWORD_HASH` | bcrypt hash of the dashboard password |
 | `CF_JWT_SECRET` | signs the session cookie |
