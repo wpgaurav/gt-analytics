@@ -1,0 +1,8 @@
+# You also need to specify these as environment variables in 
+# your Cloudflare configuration
+CF_BEARER_TOKEN=''
+CF_ACCOUNT_ID=''
+CF_PASSWORD_HASH=''
+CF_JWT_SECRET=''
+CF_AUTH_ENABLED=''
+CF_STORAGE_ENABLED=''

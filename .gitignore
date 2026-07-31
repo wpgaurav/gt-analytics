@@ -1,0 +1,16 @@
+node_modules
+
+build
+public/build
+dist
+
+.cache
+.env
+.wrangler
+.dev.vars
+.turbo
+.react-router
+
+coverage
+playwright-report
+__screenshots__

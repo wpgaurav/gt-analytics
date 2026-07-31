@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+    <head>
+        <title>03 PushState</title>
+
+        <script
+            id="counterscale-script"
+            data-site-id="your-unique-site-id"
+            data-report-localhost
+            src="http://localhost:3004/tracker.js"
+        ></script>
+    </head>
+    <body>
+        <button
+            onClick="history.pushState({page: 2}, '', '/03_pushState/part_2')"
+        >
+            Part 2
+        </button>
+    </body>
+</html>

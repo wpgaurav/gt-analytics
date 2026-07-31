@@ -1,0 +1,51 @@
+{
+    "name": "@counterscale/tracker",
+    "version": "3.4.1",
+    "descriptrion": "Counterscale tracking library for recording pageviews",
+    "homepage": "https://counterscale.dev",
+    "license": "MIT",
+    "sideEffects": false,
+    "type": "module",
+    "engines": {
+        "node": ">=20.0.0"
+    },
+    "scripts": {
+        "build": "vite build -c vite.loader.config.ts && vite build -c vite.module.config.ts && vite build -c vite.server.config.ts",
+        "lint": "eslint .",
+        "test": "vitest run && pnpm run test:integration",
+        "test:integration": "playwright test && vitest run --config vitest.integration.config.ts",
+        "test-ci": "vitest run --coverage && pnpm run test:integration",
+        "start": "node ./integration/server.js",
+        "typecheck": "tsc"
+    },
+    "devDependencies": {
+        "@counterscale/eslint-config": "workspace:*",
+        "@playwright/test": "^1.49.1",
+        "@types/node": "^22.10.2",
+        "@vitest/coverage-v8": "~4.0.8",
+        "globals": "^16.0.0",
+        "install": "^0.13.0",
+        "typescript": "^5.7.2",
+        "vite": "^7.2.2",
+        "vite-plugin-dts": "^4.4.0",
+        "vite-tsconfig-paths": "^5.1.4",
+        "vitest": "~4.0.8"
+    },
+    "publishConfig": {
+        "access": "public",
+        "registry": "https://registry.npmjs.org/"
+    },
+    "files": [
+        "dist"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/module/index.d.ts",
+            "default": "./dist/module/index.js"
+        },
+        "./server": {
+            "types": "./dist/server/index.d.ts",
+            "default": "./dist/server/index.js"
+        }
+    }
+}
