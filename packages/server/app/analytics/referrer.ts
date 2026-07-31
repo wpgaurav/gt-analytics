@@ -161,8 +161,30 @@ export function referrerHost(
     return host;
 }
 
+/**
+ * Normalises the site's own host for comparison.
+ *
+ * The tracker sends `h` as whatever `getHostnameAndPath` produced, which for a
+ * real page is the full origin -- `https://gatilab.com`, not `gatilab.com`.
+ * Comparing that literally never matched, so every internal navigation on a
+ * live site was recorded as a referral from the site's own domain. Parse when
+ * it looks like a URL, otherwise treat it as a bare host.
+ */
 function normalizeHost(value: string | null | undefined): string {
-    return (value || "").trim().toLowerCase().replace(/^www\./, "");
+    const raw = (value || "").trim().toLowerCase();
+    if (!raw) return "";
+
+    if (raw.includes("://") || raw.includes("/")) {
+        try {
+            return new URL(
+                raw.includes("://") ? raw : `https://${raw}`,
+            ).hostname.replace(/^www\./, "");
+        } catch {
+            // Fall through and use it as-is.
+        }
+    }
+
+    return raw.replace(/^www\./, "");
 }
 
 /** True when the referrer is the site itself. */

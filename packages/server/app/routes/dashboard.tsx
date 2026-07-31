@@ -32,7 +32,11 @@ import { TimeSeriesCard } from "./resources.timeseries";
 import { StatsCard } from "./resources.stats";
 import { ConversionsCard } from "./resources.conversions";
 import { requireAuth } from "~/lib/auth";
-import { listSiteUrls } from "~/sites/sites";
+import { listSiteUrls, listSites } from "~/sites/sites";
+import {
+    choosePreferredSite,
+    SITE_COOKIE_NAME,
+} from "~/lib/site-preference";
 
 export const meta: MetaFunction = () => {
     return [
@@ -42,6 +46,26 @@ export const meta: MetaFunction = () => {
 };
 
 const MAX_RETENTION_DAYS = 90;
+
+/**
+ * Managed site ids, or an empty list if the database is unreachable.
+ *
+ * Defensive on purpose: the dashboard must still render from Analytics Engine
+ * alone if the sites database is missing, and a bare `.catch()` does not help
+ * when it is the property access itself that throws.
+ */
+async function safeListSites(
+    context: LoaderFunctionArgs["context"],
+): Promise<string[]> {
+    try {
+        const db = context.cloudflare?.env?.SITES_DB;
+        if (!db) return [];
+        return (await listSites(db)).map((site) => site.site_id);
+    } catch (error) {
+        console.error("could not load managed sites", error);
+        return [];
+    }
+}
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     await requireAuth(request, context.cloudflare.env);
@@ -73,9 +97,21 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     if (url.searchParams.has("site") === false) {
         const sitesByHits =
             await analyticsEngine.getSitesOrderedByHits(interval);
+        // Prefer a managed site for the default landing target; fall back to
+        // whatever Analytics Engine has seen.
+        const managed = await safeListSites(context);
+        const known = managed.length
+            ? managed
+            : sitesByHits.map(([site]: [string, number]) => site);
 
-        // if at least one result
-        const redirectSite = sitesByHits[0]?.[0] || "";
+        // Prefer the site last looked at. Falling back to "most hits" alone
+        // meant the dashboard kept opening on whichever site happened to be
+        // busiest, which is rarely the one being worked on.
+        const redirectSite = choosePreferredSite(
+            request,
+            known,
+            known[0] || "",
+        );
         const redirectUrl = new URL(request.url);
         redirectUrl.searchParams.set("site", redirectSite);
         throw redirect(redirectUrl.toString());
@@ -88,9 +124,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
     // initiate requests to AE in parallel
 
-    // sites by hits: This is to populate the "sites" dropdown. We query the full retention
-    //                period (90 days) so that any site that has been active in the past 90 days
-    //                will show up in the dropdown.
+    // The site picker lists the sites you manage, not every site id Analytics
+    // Engine has ever seen. Deriving it from hits meant one-off ids -- test
+    // traffic, a mistyped snippet, an old deployment's default -- accumulated
+    // in the dropdown for 90 days with no way to remove them.
+    //
+    // Analytics Engine is still consulted as a fallback, so a deployment with
+    // no sites configured yet is not left with an empty picker.
     const sitesByHits = analyticsEngine.getSitesOrderedByHits(
         `${MAX_RETENTION_DAYS}d`,
     );
@@ -112,11 +152,22 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
     let out;
     try {
+        const managed = await safeListSites(context);
+
+        const fromHits = (await sitesByHits).map(
+            ([site, _]: [string, number]) => site,
+        );
+
+        // Keep the current site in the list even if it is not managed, so a
+        // link to an unmanaged site still renders a working picker.
+        const sites = managed.length ? [...managed] : fromHits;
+        if (actualSiteId && !sites.includes(actualSiteId)) {
+            sites.unshift(actualSiteId);
+        }
+
         out = {
             siteId: actualSiteId,
-            sites: (await sitesByHits).map(
-                ([site, _]: [string, number]) => site,
-            ),
+            sites,
             siteUrls,
             intervalType,
             interval,
@@ -138,6 +189,10 @@ export default function Dashboard() {
     const loading = navigation.state === "loading";
 
     function changeSite(site: string) {
+        // Remember the choice so the next visit opens here. Written client
+        // side because the loader only ever redirects when no site is named.
+        document.cookie = `${SITE_COOKIE_NAME}=${encodeURIComponent(site)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+
         // intentionally not updating prev params; don't want search
         // filters (e.g. referrer, path) to persist
 

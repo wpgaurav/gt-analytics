@@ -4,14 +4,15 @@ import { LoaderFunctionArgs, type LinksFunction } from "react-router";
 import {
     Links,
     Meta,
-    NavLink,
     Outlet,
     Scripts,
     ScrollRestoration,
     useLoaderData,
 } from "react-router";
 import { getUser, isAuthEnabled } from "~/lib/auth";
-import Icon from "~/components/Icon";
+import Sidebar from "~/components/Sidebar";
+import { listPresets } from "~/sites/presets";
+import { readPreferredSite } from "~/lib/site-preference";
 
 /**
  * The Core Forms Design System is served as static assets rather than imported
@@ -60,7 +61,23 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     const version = context.cloudflare?.env?.VERSION;
     const user = await getUser(request, context.cloudflare.env);
 
+    // The sidebar only renders for a signed-in user, so there is nothing to
+    // load (or leak) otherwise.
+    let presets: Awaited<ReturnType<typeof listPresets>> = [];
+    if (user.authenticated) {
+        try {
+            presets = await listPresets(context.cloudflare.env.SITES_DB);
+        } catch (error) {
+            // A missing presets table must not take every page down.
+            console.error("could not load presets", error);
+        }
+    }
+
+    const url = new URL(request.url);
+
     return {
+        presets,
+        siteId: url.searchParams.get("site") || readPreferredSite(request),
         version: {
             ...getVersionMeta(version),
         },
@@ -101,6 +118,8 @@ export const Layout = ({ children = [] }: { children: React.ReactNode }) => {
 export default function App() {
     const data = useLoaderData<typeof loader>();
     const showLogout = data?.user?.authenticated && data?.isAuthEnabled;
+    // Auth-disabled deployments have no sign-in step, so everyone is "in".
+    const showSidebar = data?.user?.authenticated || data?.isAuthEnabled === false;
 
     return (
         <>
@@ -109,35 +128,6 @@ export default function App() {
                     <a className="nav-brand" href="/dashboard">
                         <span>GT Analytics</span>
                     </a>
-                    <div className="nav-links">
-                        <NavLink
-                            to="/dashboard"
-                            className={({ isActive }) =>
-                                isActive ? "is-active" : undefined
-                            }
-                        >
-                            <Icon name="gauge-high" size={14} />
-                            Dashboard
-                        </NavLink>
-                        <NavLink
-                            to="/realtime"
-                            className={({ isActive }) =>
-                                isActive ? "is-active" : undefined
-                            }
-                        >
-                            <Icon name="bolt" size={14} />
-                            Real-time
-                        </NavLink>
-                        <NavLink
-                            to="/admin/sites"
-                            className={({ isActive }) =>
-                                isActive ? "is-active" : undefined
-                            }
-                        >
-                            <Icon name="browser" size={14} />
-                            Sites
-                        </NavLink>
-                    </div>
                     <div className="nav-cta">
                         {showLogout && (
                             <a className="nav-account" href="/logout">
@@ -148,9 +138,17 @@ export default function App() {
                 </div>
             </nav>
 
-            <main id="main" role="main" className="container app-main">
-                <Outlet />
-            </main>
+            <div className="container app-shell">
+                {showSidebar && (
+                    <Sidebar
+                        presets={data?.presets ?? []}
+                        siteId={data?.siteId ?? null}
+                    />
+                )}
+                <main id="main" role="main" className="app-main">
+                    <Outlet />
+                </main>
+            </div>
 
             <footer className="footer">
                 <div className="container">

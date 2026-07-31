@@ -9,6 +9,10 @@ import {
 import Icon, { channelIcon } from "~/components/Icon";
 import { requireAuth } from "~/lib/auth";
 import { listSites, type Site } from "~/sites/sites";
+import {
+    choosePreferredSite,
+    SITE_COOKIE_NAME,
+} from "~/lib/site-preference";
 
 export const meta: MetaFunction = () => [
     { title: "Real-time — GT Analytics" },
@@ -22,7 +26,13 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 
     return {
         sites,
-        siteId: url.searchParams.get("site") || sites[0]?.site_id || "",
+        siteId:
+            url.searchParams.get("site") ||
+            choosePreferredSite(
+                request,
+                sites.map((s) => s.site_id),
+                sites[0]?.site_id || "",
+            ),
         configured: Boolean(context.cloudflare.env.REALTIME),
     };
 }
@@ -114,9 +124,10 @@ export default function Realtime() {
                     id="rt-site"
                     className="select"
                     value={activeSite}
-                    onChange={(e) =>
-                        setSearchParams({ site: e.target.value })
-                    }
+                    onChange={(e) => {
+                        document.cookie = `${SITE_COOKIE_NAME}=${encodeURIComponent(e.target.value)}; Path=/; Max-Age=31536000; SameSite=Lax`;
+                        setSearchParams({ site: e.target.value });
+                    }}
                 >
                     {sites.map((s: Site) => (
                         <option key={s.site_id} value={s.site_id}>
@@ -139,7 +150,7 @@ export default function Realtime() {
                 </div>
             ) : (
                 <>
-                    <div className="kpis stack-md">
+                    <div className="kpis">
                         <Kpi
                             icon="users"
                             primary

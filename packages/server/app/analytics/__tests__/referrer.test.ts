@@ -51,6 +51,26 @@ describe("referrerHost", () => {
         );
     });
 
+    test("accepts the site's own host as a full origin, not just a hostname", () => {
+        // The tracker sends `h` as the origin -- observed live as
+        // "https://gatilab.com". Comparing that literally never matched, so
+        // every internal navigation was counted as a referral from the site
+        // itself.
+        expect(
+            referrerHost("https://gatilab.com/about/", "https://gatilab.com"),
+        ).toBe("");
+        expect(
+            referrerHost("https://gatilab.com/about/", "gatilab.com"),
+        ).toBe("");
+        expect(
+            referrerHost("https://blog.gatilab.com/x", "https://gatilab.com"),
+        ).toBe("");
+        // And still keeps genuinely external hosts.
+        expect(
+            referrerHost("https://notgatilab.com/x", "https://gatilab.com"),
+        ).toBe("notgatilab.com");
+    });
+
     test("understands android-app referrers", () => {
         expect(referrerHost("android-app://com.google.android.gm")).toBe(
             "com.google.android.gm",

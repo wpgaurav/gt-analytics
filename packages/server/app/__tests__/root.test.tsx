@@ -26,6 +26,8 @@ function stubLoader(overrides: Record<string, unknown> = {}) {
             url: "http://example.com/path",
             user: { authenticated: false },
             isAuthEnabled: true,
+            presets: [],
+            siteId: null,
             ...overrides,
         };
     };
@@ -42,9 +44,13 @@ describe("Root", () => {
         vitest.clearAllMocks();
     });
 
-    test("renders the primary navigation", async () => {
+    test("renders the brand and the sidebar navigation", async () => {
         const RemixStub = createRoutesStub([
-            { path: "/", Component: Root, loader: stubLoader() },
+            {
+                path: "/",
+                Component: Root,
+                loader: stubLoader({ user: { authenticated: true } }),
+            },
         ]);
 
         render(<RemixStub />);
@@ -55,14 +61,20 @@ describe("Root", () => {
         expect(document.querySelector(".nav-brand")).toHaveTextContent(
             "GT Analytics",
         );
+        // Navigation lives in the sidebar now, not the top bar.
         expect(screen.getByText("Dashboard").closest("a")).toHaveAttribute(
             "href",
             "/dashboard",
+        );
+        expect(screen.getByText("Real-time").closest("a")).toHaveAttribute(
+            "href",
+            "/realtime",
         );
         expect(screen.getByText("Sites").closest("a")).toHaveAttribute(
             "href",
             "/admin/sites",
         );
+        expect(document.querySelector(".sidebar")).toBeInTheDocument();
     });
 
     test("shows the deployed version", async () => {

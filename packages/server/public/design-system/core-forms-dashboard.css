@@ -47,10 +47,39 @@
    App shell
    -------------------------------------------------------------------------- */
 
+.app-shell {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: var(--gap-lg);
+    align-items: start;
+}
+
+@media (min-width: 960px) {
+    .app-shell {
+        grid-template-columns: 210px minmax(0, 1fr);
+        gap: var(--gap-xl);
+    }
+}
+
 .app-main {
     /* CFDS .nav is position:sticky at a hardcoded 68px. */
     padding-block: var(--gap-lg) var(--gap-xl);
     min-height: calc(100vh - 68px);
+    /* Grid child: without this a wide table refuses to shrink and pushes the
+       page into horizontal scroll instead of scrolling inside .table-wrap. */
+    min-width: 0;
+}
+
+/* Every band of a page is separated by the same gap, whatever it is made of --
+   a KPI row, a card, a grid of cards, a form. One rule instead of a growing
+   list of sibling combinations. */
+.app-main > * + * {
+    margin-block-start: var(--gap-md);
+}
+
+/* The page title earns a larger break than the bands below it. */
+.app-main > .app-head + * {
+    margin-block-start: var(--gap-lg);
 }
 
 /* CFDS hides .nav-links below 860px because its marketing nav expects the
@@ -75,7 +104,6 @@
     align-items: flex-end;
     justify-content: space-between;
     gap: var(--gap-md);
-    margin-block-end: var(--gap-lg);
 }
 
 .app-head h1 {
@@ -94,6 +122,197 @@
     flex-wrap: wrap;
     gap: var(--gap-sm);
     align-items: center;
+}
+
+
+/* --------------------------------------------------------------------------
+   Sidebar: navigation and saved views.
+   -------------------------------------------------------------------------- */
+
+.sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-lg);
+    padding-block: var(--gap-lg);
+}
+
+@media (min-width: 960px) {
+    .sidebar {
+        position: sticky;
+        /* Clears the 68px sticky nav. */
+        top: calc(68px + var(--gap-lg));
+        max-height: calc(100vh - 68px - var(--gap-lg) * 2);
+        overflow-y: auto;
+    }
+}
+
+/* Below the shell breakpoint the sidebar becomes a horizontal strip. A drawer
+   would need JS state and a focus trap to be done properly; a scrolling strip
+   costs nothing and never traps anyone. */
+@media (max-width: 959px) {
+    .sidebar {
+        flex-direction: row;
+        gap: var(--gap-md);
+        overflow-x: auto;
+        padding-block: var(--gap-md) 0;
+        border-block-end: 1px solid var(--ink-100);
+    }
+
+    .sidebar__group {
+        flex: none;
+        flex-direction: row;
+        align-items: center;
+        gap: var(--gap-xs);
+    }
+
+    .sidebar__label,
+    .sidebar__empty {
+        display: none;
+    }
+}
+
+.sidebar__group {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sidebar__label {
+    margin: 0 0 var(--gap-xs);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--ink-400);
+}
+
+.sidebar__empty {
+    margin: 0;
+    font-size: 0.78rem;
+    color: var(--ink-500);
+    line-height: 1.5;
+}
+
+.sidebar__link {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    padding: 7px var(--gap-sm);
+    border-radius: var(--r-md);
+    font-size: 0.88rem;
+    color: var(--ink-700);
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background var(--t-fast), color var(--t-fast);
+}
+
+.sidebar__link .icon {
+    color: var(--ink-400);
+}
+
+.sidebar__link:hover {
+    background: var(--bg-soft);
+    color: var(--ink-900);
+}
+
+.sidebar__link.is-active,
+.sidebar__preset.is-active .sidebar__link {
+    background: var(--brand-50);
+    color: var(--brand-700);
+    font-weight: 600;
+}
+
+.sidebar__link.is-active .icon,
+.sidebar__preset.is-active .sidebar__link .icon {
+    color: var(--brand-500);
+}
+
+.sidebar__preset {
+    display: flex;
+    align-items: center;
+    gap: 2px;
+}
+
+.sidebar__preset .sidebar__link {
+    flex: 1;
+    min-width: 0;
+}
+
+.sidebar__preset .sidebar__link span {
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.sidebar__remove {
+    flex: none;
+    inline-size: 22px;
+    block-size: 22px;
+    border: 0;
+    border-radius: var(--r-sm);
+    background: none;
+    color: var(--ink-300);
+    font-size: 1rem;
+    line-height: 1;
+    cursor: pointer;
+    /* Revealed on hover or keyboard focus -- a delete control on every row
+       would compete with the label it sits beside. */
+    opacity: 0;
+    transition: opacity var(--t-fast), color var(--t-fast);
+}
+
+.sidebar__preset:hover .sidebar__remove,
+.sidebar__remove:focus-visible {
+    opacity: 1;
+}
+
+.sidebar__remove:hover {
+    color: var(--danger-500);
+    background: var(--ink-100);
+}
+
+.sidebar__add {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    margin-block-start: var(--gap-xs);
+    padding: 7px var(--gap-sm);
+    border: 1px dashed var(--ink-200);
+    border-radius: var(--r-md);
+    background: none;
+    font: inherit;
+    font-size: 0.82rem;
+    color: var(--ink-500);
+    cursor: pointer;
+    white-space: nowrap;
+}
+
+.sidebar__add:hover {
+    border-color: var(--brand-200);
+    color: var(--brand-600);
+}
+
+.sidebar__save {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap-xs);
+    margin-block-start: var(--gap-xs);
+}
+
+.sidebar__save .input {
+    font-size: 0.85rem;
+    padding: 7px var(--gap-sm);
+}
+
+.sidebar__save-actions {
+    display: flex;
+    gap: var(--gap-xs);
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .sidebar__link,
+    .sidebar__remove {
+        transition: none;
+    }
 }
 
 /* --------------------------------------------------------------------------
@@ -348,17 +567,11 @@
     box-shadow: var(--shadow-xs);
 }
 
-.card + .card {
-    margin-block-start: var(--gap-md);
-}
-
-/* Inside a grid the cards are laid out by the grid, but they are still
-   adjacent siblings, so the stacking margin above would push every card
-   except the first one down by a row-gap's worth. */
-.grid-cards > .card + .card,
-.kpis > .card + .card {
-    margin-block-start: 0;
-}
+/* Card spacing is owned by the page flow (.app-main > * + *), not by the card
+   itself. Scoping it to `.card + .card` only ever spaced two adjacent cards --
+   a .kpis row followed by a card, or two .grid-cards in a row, sat flush
+   against each other, which is exactly what went wrong on the realtime and
+   settings pages. */
 
 .card-head {
     display: flex;
@@ -850,7 +1063,6 @@
     flex-wrap: wrap;
     align-items: center;
     gap: var(--gap-sm);
-    margin-block-end: var(--gap-lg);
 }
 
 .toolbar .select {
