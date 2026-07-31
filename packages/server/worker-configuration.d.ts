@@ -10,6 +10,12 @@ declare namespace Cloudflare {
 		CF_AUTH_ENABLED: string;
 		CF_TRACKER_SCRIPT_NAME: string;
 		CF_STORAGE_ENABLED: string;
+		/** Analytics Engine dataset the SQL read layer queries. Must match the
+		 *  `analytics_engine_datasets` binding below, or reads and writes
+		 *  address different tables. */
+		CF_AE_DATASET: string;
+		/** Bearer token for machine access to the JSON API. */
+		CF_API_TOKEN: string;
 		DAILY_ROLLUPS: R2Bucket;
 		WEB_COUNTER_AE: AnalyticsEngineDataset;
 		ASSETS: Fetcher;

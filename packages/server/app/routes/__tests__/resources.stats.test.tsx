@@ -1,8 +1,8 @@
 import { describe, test, expect, beforeEach, afterEach, vi } from "vitest";
 import { loader } from "../resources.stats";
 
-vi.mock("~/lib/auth", () => ({
-    requireAuth: vi.fn(),
+vi.mock("~/lib/api-auth", () => ({
+    requireApiAuth: vi.fn(),
 }));
 
 describe("resources.stats loader", () => {

@@ -13,6 +13,10 @@ import "vitest-dom/extend-expect";
 import { loader } from "../resources.device";
 import { createFetchResponse, getDefaultContext } from "./testutils";
 
+vi.mock("~/lib/api-auth", () => ({
+    requireApiAuth: vi.fn(),
+}));
+
 describe("Resources/Device route", () => {
     let fetch: Mock;
 

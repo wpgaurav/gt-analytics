@@ -23,19 +23,22 @@ export default {
         ctx: ExecutionContext,
     ) {
         if (env.CF_STORAGE_ENABLED === "false") return
-        try {
-            ctx.waitUntil(
-                extractAsArrow(
-                    {
-                        accountId: env.CF_ACCOUNT_ID,
-                        bearerToken: env.CF_BEARER_TOKEN,
-                    },
-                    env.DAILY_ROLLUPS,
-                ),
-            );
-        } catch (error) {
-            console.error(error);
-        }
+        // NOTE: the catch must hang off the promise, not wrap the waitUntil
+        // call. waitUntil returns synchronously, so a try/catch around it only
+        // ever sees construction errors -- a rejection inside extractAsArrow
+        // would go unreported.
+        ctx.waitUntil(
+            extractAsArrow(
+                {
+                    accountId: env.CF_ACCOUNT_ID,
+                    bearerToken: env.CF_BEARER_TOKEN,
+                    dataset: env.CF_AE_DATASET,
+                },
+                env.DAILY_ROLLUPS,
+            ).catch((error) => {
+                console.error("daily rollup failed", error);
+            }),
+        );
     },
     // @ts-expect-error TODO figure out types here
     async fetch(request: any, env: any, ctx: any) {

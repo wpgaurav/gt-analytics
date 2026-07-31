@@ -5,8 +5,10 @@ import type { LoaderFunctionArgs } from "react-router";
 import { getFiltersFromSearchParams, paramsFromUrl } from "~/lib/utils";
 import PaginatedTableCard from "~/components/PaginatedTableCard";
 import { SearchFilters } from "~/lib/types";
+import { requireApiAuth } from "~/lib/api-auth";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
+    await requireApiAuth(request, context.cloudflare.env);
     const { analyticsEngine } = context;
 
     const { interval, site, page = 1 } = paramsFromUrl(request.url);

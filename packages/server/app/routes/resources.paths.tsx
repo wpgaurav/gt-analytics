@@ -8,10 +8,10 @@ import {
 } from "~/lib/utils";
 import PaginatedTableCard from "~/components/PaginatedTableCard";
 import { SearchFilters } from "~/lib/types";
-import { requireAuth } from "~/lib/auth";
+import { requireApiAuth } from "~/lib/api-auth";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    await requireApiAuth(request, context.cloudflare.env);
     const { analyticsEngine } = context;
 
     const { interval, site, page = 1 } = paramsFromUrl(request.url);

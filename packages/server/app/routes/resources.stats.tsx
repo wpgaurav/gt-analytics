@@ -8,10 +8,10 @@ import { useEffect } from "react";
 import { useFetcher } from "react-router";
 import { Card } from "~/components/ui/card";
 import { SearchFilters } from "~/lib/types";
-import { requireAuth } from "~/lib/auth";
+import { requireApiAuth } from "~/lib/api-auth";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    await requireApiAuth(request, context.cloudflare.env);
     const { analyticsEngine } = context;
     const { interval, site } = paramsFromUrl(request.url);
     const url = new URL(request.url);

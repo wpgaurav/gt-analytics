@@ -166,9 +166,20 @@ function filtersToSql(filters: SearchFilters) {
  *       See: https://developers.cloudflare.com/analytics/analytics-engine/sql-reference/
  */
 
+/**
+ * The Analytics Engine dataset name used when none is configured.
+ *
+ * This is the name upstream Counterscale ships with. It is only a fallback:
+ * whenever the wrangler `analytics_engine_datasets` binding points at a
+ * differently-named dataset, CF_AE_DATASET must be set to match it, or reads
+ * and writes address different tables and every query returns zero rows.
+ */
+export const DEFAULT_DATASET = "metricsDataset";
+
 export class AnalyticsEngineAPI {
     cfApiToken: string;
     cfAccountId: string;
+    dataset: string;
     defaultHeaders: {
         "content-type": string;
         "X-Source": string;
@@ -176,9 +187,14 @@ export class AnalyticsEngineAPI {
     };
     defaultUrl: string;
 
-    constructor(cfAccountId: string, cfApiToken: string) {
+    constructor(
+        cfAccountId: string,
+        cfApiToken: string,
+        dataset: string = DEFAULT_DATASET,
+    ) {
         this.cfAccountId = cfAccountId;
         this.cfApiToken = cfApiToken;
+        this.dataset = dataset || DEFAULT_DATASET;
 
         this.defaultUrl = `https://api.cloudflare.com/client/v4/accounts/${this.cfAccountId}/analytics_engine/sql`;
         this.defaultHeaders = {
@@ -246,7 +262,7 @@ export class AnalyticsEngineAPI {
 
             /* output as UTC */
             toDateTime(_bucket, 'Etc/UTC') as bucket
-            FROM metricsDataset
+            FROM ${this.dataset}
             WHERE timestamp >= toDateTime('${localStartTime.format("YYYY-MM-DD HH:mm:ss")}')
 								AND timestamp < toDateTime('${localEndTime.format("YYYY-MM-DD HH:mm:ss")}')
                 AND ${ColumnMappings.siteId} = '${siteId}'
@@ -352,7 +368,7 @@ export class AnalyticsEngineAPI {
             SELECT SUM(_sample_interval) as count,
                 ${ColumnMappings.newVisitor} as isVisitor,
                 ${ColumnMappings.bounce} as isBounce
-            FROM metricsDataset
+            FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql} AND timestamp < ${endIntervalSql}
                 ${filterStr}
             AND ${siteIdColumn} = '${siteId}'
@@ -416,7 +432,7 @@ export class AnalyticsEngineAPI {
         const _column = ColumnMappings[column];
         const query = `
             SELECT ${_column}, SUM(_sample_interval) as count
-            FROM metricsDataset
+            FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql} AND timestamp < ${endIntervalSql}
                 AND ${ColumnMappings.newVisitor} = 1
                 AND ${ColumnMappings.siteId} = '${siteId}'
@@ -492,7 +508,7 @@ export class AnalyticsEngineAPI {
                 ${ColumnMappings.newVisitor} as isVisitor, 
                 ${ColumnMappings.bounce} as isBounce,
                 ${columnsStrWithAliases}
-            FROM metricsDataset
+            FROM ${this.dataset}
             WHERE timestamp >= toDateTime('${startDateTimeSql}') AND timestamp < toDateTime('${endDateTimeSql}')
             GROUP BY timestamp,
                 ${ColumnMappings.siteId}, 
@@ -584,7 +600,7 @@ export class AnalyticsEngineAPI {
             SELECT ${_column},
                 ${ColumnMappings.newVisitor} as isVisitor,
                 SUM(_sample_interval) as count
-            FROM metricsDataset
+            FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql} AND timestamp < ${endIntervalSql}
                 AND ${ColumnMappings.newVisitor} = 0
                 AND ${ColumnMappings.siteId} = '${siteId}'
@@ -889,7 +905,7 @@ export class AnalyticsEngineAPI {
         const query = `
             SELECT SUM(_sample_interval) as count,
                 ${ColumnMappings.siteId} as siteId
-            FROM metricsDataset
+            FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql} AND timestamp < ${endIntervalSql}
             GROUP BY siteId
             ORDER BY count DESC
@@ -936,7 +952,7 @@ export class AnalyticsEngineAPI {
             SELECT
                 MIN(timestamp) as earliestEvent,
                 ${ColumnMappings.bounce} as isBounce
-            FROM metricsDataset
+            FROM ${this.dataset}
             WHERE ${ColumnMappings.siteId} = '${siteId}'
             GROUP by isBounce
         `;

@@ -10,14 +10,14 @@ import { useFetcher } from "react-router";
 import { Card, CardContent } from "~/components/ui/card";
 import TimeSeriesChart from "~/components/TimeSeriesChart";
 import { SearchFilters } from "~/lib/types";
-import { requireAuth } from "~/lib/auth";
+import { requireApiAuth } from "~/lib/api-auth";
 import type { ViewsGroupedByInterval } from "~/analytics/query";
 
 export async function loader({
     context,
     request,
 }: LoaderFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    await requireApiAuth(request, context.cloudflare.env);
 
     const { analyticsEngine } = context;
     const { interval, site } = paramsFromUrl(request.url);
