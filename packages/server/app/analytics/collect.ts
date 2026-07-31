@@ -218,6 +218,8 @@ export function collectRequestHandler(
         referrerHost: referrerHost(attributedReferrer, params.h),
         channel,
         clickId: clickId?.name || (params.ci ? params.ci : ""),
+        // Absent means the session is still on the page it started on.
+        entryPath: params.ep || params.p,
         newVisitor: isVisit ? 1 : 0,
         newSession: 0, // dead column
         bounce: bounceValue,
@@ -322,6 +324,7 @@ interface DataPoint {
     referrerHost?: string;
     channel?: string;
     clickId?: string;
+    entryPath?: string;
 
     // doubles
     newVisitor: number;
@@ -357,6 +360,7 @@ export function writeDataPoint(
             data.referrerHost || "", // blob16
             data.channel || "", // blob17
             data.clickId || "", // blob18
+            data.entryPath || "", // blob19
         ],
         doubles: [data.newVisitor || 0, data.newSession || 0, data.bounce],
     };

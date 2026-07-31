@@ -16,6 +16,7 @@ export class EventsAPI {
         private dataset: string,
     ) {}
 
+
     private async query(sql: string) {
         return fetch(
             `https://api.cloudflare.com/client/v4/accounts/${this.cfAccountId}/analytics_engine/sql`,
@@ -87,4 +88,58 @@ export class EventsAPI {
             row.type,
         ]);
     }
+
+    /**
+     * Average engaged seconds per page.
+     *
+     * Engagement is a separate event fired when a page is hidden, so it lives
+     * in the events dataset and is joined to pages by path. Pages viewed
+     * before engagement tracking shipped simply have no entry.
+     */
+    async getDurationByPath(
+        siteId: string,
+        interval: string,
+        tz?: string,
+        limit = 200,
+    ): Promise<Map<string, { avgSeconds: number; samples: number }>> {
+        const { startIntervalSql, endIntervalSql } = intervalToSql(
+            interval,
+            tz,
+        );
+
+        const sql = `
+            SELECT ${EventColumnMappings.path} AS path,
+                   SUM(_sample_interval * ${EventColumnMappings.value}) AS total,
+                   SUM(_sample_interval) AS samples
+            FROM ${this.dataset}
+            WHERE timestamp >= ${startIntervalSql}
+              AND timestamp < ${endIntervalSql}
+              AND ${EventColumnMappings.siteId} = '${siteId}'
+              AND ${EventColumnMappings.name} = 'duration'
+            GROUP BY path
+            ORDER BY samples DESC
+            LIMIT ${limit}
+        `;
+
+        const out = new Map<string, { avgSeconds: number; samples: number }>();
+
+        const response = await this.query(sql);
+        if (!response.ok) return out;
+
+        const body = (await response.json()) as {
+            data?: { path: string; total: string; samples: string }[];
+        };
+
+        for (const row of body.data ?? []) {
+            const samples = Number(row.samples) || 0;
+            if (!samples) continue;
+            out.set(row.path, {
+                avgSeconds: (Number(row.total) || 0) / samples,
+                samples,
+            });
+        }
+
+        return out;
+    }
+
 }

@@ -8,7 +8,11 @@ export function buildCollectRequestParams(
     referrer: string,
     utmParams: UtmParams = {},
     hitType?: string,
-    attribution: { sessionReferrer?: string; clickId?: string } = {},
+    attribution: {
+        sessionReferrer?: string;
+        clickId?: string;
+        entryPath?: string;
+    } = {},
 ): CollectRequestParams {
     const params: CollectRequestParams = {
         p: path,
@@ -29,6 +33,12 @@ export function buildCollectRequestParams(
 
     if (attribution.clickId) {
         params.ci = attribution.clickId;
+    }
+
+    // Only worth sending when the session has moved on from where it started;
+    // otherwise the collector can infer it from the path.
+    if (attribution.entryPath && attribution.entryPath !== path) {
+        params.ep = attribution.entryPath;
     }
 
     Object.assign(params, utmParams);

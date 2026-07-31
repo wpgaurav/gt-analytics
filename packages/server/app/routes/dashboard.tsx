@@ -10,7 +10,7 @@ import {
 
 import { ReferrerCard } from "./resources.referrer";
 import { ChannelCard } from "./resources.channel";
-import { PathsCard } from "./resources.paths";
+import { PagesCard } from "./resources.pages";
 import { BrowserCard } from "./resources.browser";
 import { BrowserVersionCard } from "./resources.browserversion";
 import { CountryCard } from "./resources.country";
@@ -308,7 +308,7 @@ export default function Dashboard() {
                 />
 
                 <div className="grid-cards grid-cards--2">
-                    <PathsCard {...cardProps} linkBuilder={pathLinkBuilder} />
+                    <PagesCard {...cardProps} baseUrl={siteBase} />
                     <ReferrerCard {...cardProps} />
                 </div>
 

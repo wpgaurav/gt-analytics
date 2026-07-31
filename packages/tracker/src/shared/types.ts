@@ -6,6 +6,7 @@ export type CollectRequestParams = {
     ht?: string; // hit type
     sr?: string; // session first-touch referrer
     ci?: string; // ad-platform click id parameter name
+    ep?: string; // path the session started on
     [key: string]: string | undefined; // Allow additional string properties
 } & UtmParams;
 

@@ -1,4 +1,5 @@
 import { autoTrackPageviews } from "./track";
+import { trackEngagement } from "./engagement";
 import type { BaseClientConfig } from "../shared/types";
 
 export type ClientOpts = BaseClientConfig & {
@@ -11,6 +12,7 @@ export class Client {
     reportOnLocalhost = false;
 
     _cleanupAutoTrackPageviews?: () => void;
+    _cleanupEngagement?: () => void;
 
     constructor(opts: ClientOpts) {
         this.siteId = opts.siteId;
@@ -26,6 +28,7 @@ export class Client {
             // This helps with testing and avoids issues with async trackPageview
             setTimeout(() => {
                 this._cleanupAutoTrackPageviews = autoTrackPageviews(this);
+                this._cleanupEngagement = trackEngagement(this);
             }, 0);
         }
     }
@@ -33,6 +36,9 @@ export class Client {
     cleanup() {
         if (this._cleanupAutoTrackPageviews) {
             this._cleanupAutoTrackPageviews();
+        }
+        if (this._cleanupEngagement) {
+            this._cleanupEngagement();
         }
     }
 }

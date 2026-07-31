@@ -32,6 +32,9 @@ export default function Sidebar({ presets, siteId }: SidebarProps) {
                 <SidebarLink to="/realtime" icon="bolt">
                     Real-time
                 </SidebarLink>
+                <SidebarLink to="/pages" icon="file-lines">
+                    Pages
+                </SidebarLink>
             </nav>
 
             <nav className="sidebar__group">

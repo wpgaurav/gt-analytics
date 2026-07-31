@@ -871,6 +871,115 @@ export class AnalyticsEngineAPI {
             .map(([key, counts]) => [key, counts.visitors, counts.views]);
     }
 
+    /**
+     * Per-page metrics: visitors, views, and landing-page bounce rate.
+     *
+     * Bounce is grouped by `entryPath`, not `path`. The marker is +1 on a
+     * session's first pageview and -1 on its second, and that second view is
+     * usually a different page -- so grouping by the viewed path would have
+     * one page cancelling another and could report a negative rate. Attributing
+     * both markers to the page the session started on is what makes the number
+     * mean "of the people who landed here, how many left without going on".
+     *
+     * Rows recorded before entryPath existed have an empty value; they are
+     * counted for views and visitors but contribute no bounce signal.
+     */
+    async getPageMetrics(
+        siteId: string,
+        interval: string,
+        tz?: string,
+        filters: SearchFilters = {},
+        limit = 100,
+    ): Promise<
+        {
+            path: string;
+            visitors: number;
+            views: number;
+            entries: number;
+            bounceRate: number | null;
+        }[]
+    > {
+        const { startIntervalSql, endIntervalSql } = intervalToSql(interval, tz);
+        const filterStr = filtersToSql(filters);
+
+        const pageQuery = `
+            SELECT ${ColumnMappings.path} AS path,
+                   SUM(_sample_interval) AS views,
+                   SUM(_sample_interval * ${ColumnMappings.newVisitor}) AS visitors
+            FROM ${this.dataset}
+            WHERE timestamp >= ${startIntervalSql}
+              AND timestamp < ${endIntervalSql}
+              AND ${ColumnMappings.siteId} = '${siteId}'
+              ${filterStr}
+            GROUP BY path
+            ORDER BY views DESC
+            LIMIT ${limit}
+        `;
+
+        const bounceQuery = `
+            SELECT ${ColumnMappings.entryPath} AS path,
+                   SUM(_sample_interval * ${ColumnMappings.bounce}) AS bounces,
+                   SUM(_sample_interval * ${ColumnMappings.newVisitor}) AS entries
+            FROM ${this.dataset}
+            WHERE timestamp >= ${startIntervalSql}
+              AND timestamp < ${endIntervalSql}
+              AND ${ColumnMappings.siteId} = '${siteId}'
+              AND ${ColumnMappings.entryPath} != ''
+              ${filterStr}
+            GROUP BY path
+        `;
+
+        const [pageResponse, bounceResponse] = await Promise.all([
+            this.query(pageQuery),
+            this.query(bounceQuery),
+        ]);
+
+        if (!pageResponse.ok) return [];
+
+        const pages = (
+            (await pageResponse.json()) as {
+                data?: { path: string; views: string; visitors: string }[];
+            }
+        ).data ?? [];
+
+        const bounceByPath = new Map<
+            string,
+            { bounces: number; entries: number }
+        >();
+
+        if (bounceResponse.ok) {
+            const rows = (
+                (await bounceResponse.json()) as {
+                    data?: { path: string; bounces: string; entries: string }[];
+                }
+            ).data ?? [];
+            for (const row of rows) {
+                bounceByPath.set(row.path, {
+                    bounces: Number(row.bounces) || 0,
+                    entries: Number(row.entries) || 0,
+                });
+            }
+        }
+
+        return pages.map((row) => {
+            const bounce = bounceByPath.get(row.path);
+            // Without entries there is nothing to divide by -- report null so
+            // the UI can show "no data" rather than a misleading 0%.
+            const bounceRate =
+                bounce && bounce.entries > 0
+                    ? Math.max(0, Math.min(1, bounce.bounces / bounce.entries))
+                    : null;
+
+            return {
+                path: row.path,
+                views: Number(row.views) || 0,
+                visitors: Number(row.visitors) || 0,
+                entries: bounce?.entries ?? 0,
+                bounceRate,
+            };
+        });
+    }
+
     async getCountByCountry(
         siteId: string,
         interval: string,

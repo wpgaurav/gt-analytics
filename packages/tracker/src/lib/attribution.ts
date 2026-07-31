@@ -13,6 +13,7 @@
 
 const REFERRER_KEY = "_cs_ref";
 const CLICKID_KEY = "_cs_cid";
+const ENTRY_KEY = "_cs_entry";
 
 /** Ad-platform click IDs, in the order they are checked. */
 const CLICK_ID_PARAMS = [
@@ -99,4 +100,25 @@ export function getSessionClickId(search: string): string {
     }
 
     return storage.getItem(CLICKID_KEY) || "";
+}
+
+/**
+ * Records the path the session started on, and returns it on every later call.
+ *
+ * Bounce rate is only meaningful per *landing* page. The bounce marker itself
+ * cannot carry that: it is +1 on the first pageview and -1 on the second,
+ * which is usually a different path, so grouping it by path would have each
+ * page cancelling a different one -- and could report a negative rate. Tagging
+ * every hit with the session's entry path makes the two markers cancel against
+ * the same page, which is what makes the rate correct.
+ */
+export function rememberEntryPath(currentPath: string): string {
+    const storage = safeSession();
+    if (!storage) return currentPath;
+
+    const stored = storage.getItem(ENTRY_KEY);
+    if (stored !== null) return stored;
+
+    storage.setItem(ENTRY_KEY, currentPath);
+    return currentPath;
 }

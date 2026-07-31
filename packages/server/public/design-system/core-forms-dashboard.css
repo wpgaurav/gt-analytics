@@ -604,6 +604,18 @@
     color: var(--ink-800);
 }
 
+.card-head__link {
+    font-size: 0.8rem;
+    font-weight: 600;
+    color: var(--brand-600);
+    text-decoration: none;
+    white-space: nowrap;
+}
+
+.card-head__link:hover {
+    text-decoration: underline;
+}
+
 .card-body {
     padding: var(--gap-lg);
 }

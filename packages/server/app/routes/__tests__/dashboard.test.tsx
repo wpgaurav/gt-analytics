@@ -239,6 +239,12 @@ describe("Dashboard route", () => {
                         },
                     },
                     {
+                        path: "/resources/pages",
+                        loader: () => {
+                            return { rows: [] };
+                        },
+                    },
+                    {
                         path: "/resources/paths",
                         loader: () => {
                             return { countsByProperty: [] };
@@ -382,6 +388,23 @@ describe("Dashboard route", () => {
                         path: "/resources/timeseries",
                         loader: () => {
                             return {};
+                        },
+                    },
+                    {
+                        path: "/resources/pages",
+                        loader: () => {
+                            return {
+                                rows: [
+                                    {
+                                        path: "/about",
+                                        visitors: 100,
+                                        views: 200,
+                                        entries: 60,
+                                        bounceRate: 0.4,
+                                        avgSeconds: 45,
+                                    },
+                                ],
+                            };
                         },
                     },
                     {

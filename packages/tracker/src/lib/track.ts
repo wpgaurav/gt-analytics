@@ -10,6 +10,7 @@ import {
 import { buildCollectRequestParams } from "../shared/request";
 import {
     getSessionClickId,
+    rememberEntryPath,
     rememberSessionReferrer,
 } from "./attribution";
 
@@ -126,6 +127,7 @@ export async function trackPageview(
     // page stay credited to wherever the visit actually came from.
     const sessionReferrer = rememberSessionReferrer(referrer);
     const clickId = getSessionClickId(window.location.search);
+    const entryPath = rememberEntryPath(path);
 
     const requestParams = buildCollectRequestParams(
         client.siteId,
@@ -134,7 +136,7 @@ export async function trackPageview(
         referrer,
         utmParams,
         hitType,
-        { sessionReferrer, clickId },
+        { sessionReferrer, clickId, entryPath },
     );
 
     makeRequest(client.reporterUrl, requestParams);

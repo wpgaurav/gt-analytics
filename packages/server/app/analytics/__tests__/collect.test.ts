@@ -137,6 +137,7 @@ describe("collectRequestHandler", () => {
                 "google.com", // referrer host, normalised from the referrer
                 "search", // channel, derived from that referrer
                 "", // click id: none on this request
+                "/post/123", // entry path: same page, so it defaults to the path
             ],
             doubles: [
                 1, // new visitor

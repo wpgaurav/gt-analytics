@@ -42,6 +42,11 @@ export const ColumnMappings = {
     // Which click ID was on the landing URL, e.g. gclid. Names only -- the
     // values identify an individual click and are not worth storing.
     clickId: "blob18",
+    // Path the session started on, carried on every hit in that session.
+    // Bounce is +1 on the first pageview and -1 on the second -- usually a
+    // different path -- so a per-page rate is only correct when both markers
+    // are attributed to the same landing page.
+    entryPath: "blob19",
 
     /**
      * doubles
