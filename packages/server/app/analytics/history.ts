@@ -25,6 +25,12 @@ import { parseRange, routeRange, type RangeSource } from "./range";
 // entry point, which is bundled without tsconfig path resolution.
 import { listSiteLiveFrom } from "../sites/sites";
 import { getDateTimeRange } from "../lib/utils";
+import dayjs from "dayjs";
+import utc from "dayjs/plugin/utc";
+import timezone from "dayjs/plugin/timezone";
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 export interface Counts {
     views: number;
@@ -167,6 +173,7 @@ export class HistoryAPI {
         >
     > {
         const route = await this.route(siteId, interval, tz);
+        const zone = tz ?? "UTC";
         const byDate = new Map<
             string,
             { views: number; visitors: number; bounces: number }
@@ -181,9 +188,7 @@ export class HistoryAPI {
             );
             truncated = archived.truncated;
             for (const point of seriesByDay(archived.rows, siteId)) {
-                // Same key shape Analytics Engine returns, so the two halves
-                // merge and the chart's date formatting stays unchanged.
-                byDate.set(`${point.date}T00:00:00Z`, {
+                byDate.set(dayKeyFromLocalDate(point.date, zone), {
                     views: point.views,
                     visitors: point.visitors,
                     bounces: point.bounces,
@@ -195,15 +200,26 @@ export class HistoryAPI {
             const { start, end } =
                 route.source === "ae"
                     ? (() => {
-                          const bounds = getDateTimeRange(interval, tz ?? "UTC");
+                          const bounds = getDateTimeRange(interval, zone);
                           return {
                               start: bounds.startDate,
                               end: bounds.endDate,
                           };
                       })()
                     : {
-                          start: new Date(`${route.aeStart}T00:00:00`),
-                          end: new Date(`${route.aeEnd}T23:59:59`),
+                          // Built in the report's timezone. `new Date("...T00:00:00")`
+                          // parses as the *server's* local time, which put the
+                          // window 5.5 hours early and made Analytics Engine
+                          // bucket the day at 18:30 boundaries -- producing a
+                          // duplicate day and a day of zeroes on the chart.
+                          start: dayjs
+                              .tz(route.aeStart, zone)
+                              .startOf("day")
+                              .toDate(),
+                          end: dayjs
+                              .tz(route.aeEnd, zone)
+                              .endOf("day")
+                              .toDate(),
                       };
             const live = await this.ae.getViewsGroupedByInterval(
                 siteId,
@@ -215,7 +231,10 @@ export class HistoryAPI {
             );
 
             for (const [stamp, counts] of live) {
-                const date = String(stamp);
+                const date = dayKeyFromLocalDate(
+                    localDateFromAeKey(stamp, zone),
+                    zone,
+                );
                 const existing = byDate.get(date) ?? {
                     views: 0,
                     visitors: 0,
@@ -410,6 +429,32 @@ export class HistoryAPI {
 
         return { data, source: route.source, truncated };
     }
+}
+
+/**
+ * One key per day, in the form the rest of the app already uses.
+ *
+ * Analytics Engine keys a day by the *UTC instant* of that day's local
+ * midnight -- in Asia/Kolkata, 2026-07-31 is keyed "2026-07-30 18:30:00" --
+ * while the archive knows only the date. Two consequences, both of which
+ * showed up on the chart:
+ *
+ * Mixing the formats breaks the sort, because a space sorts before "T", so a
+ * day's live half landed ahead of its archived half instead of merging with
+ * it. And taking the date off the front of an Analytics Engine key gives the
+ * wrong day for any timezone behind UTC midnight, which folded today's
+ * traffic into yesterday.
+ *
+ * So both halves are converted to a local date and re-keyed the same way
+ * Analytics Engine would key it. For a range it answers alone, the output is
+ * byte-identical to before.
+ */
+function dayKeyFromLocalDate(localDate: string, tz: string): string {
+    return dayjs.tz(localDate, tz).utc().format("YYYY-MM-DD HH:mm:ss");
+}
+
+function localDateFromAeKey(stamp: string, tz: string): string {
+    return dayjs.utc(String(stamp)).tz(tz).format("YYYY-MM-DD");
 }
 
 function add(target: Map<string, Counts>, key: string, counts: Counts) {

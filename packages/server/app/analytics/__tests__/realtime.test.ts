@@ -3,11 +3,38 @@ import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { RealtimeSite } from "../../../workers/realtime";
 import { pushRealtimeHit, visitorKey } from "../realtime-client";
 
-function makeSite() {
-    return new RealtimeSite(
-        {} as unknown as DurableObjectState,
-        {},
-    );
+/**
+ * A Durable Object state stub backed by a plain Map.
+ *
+ * The object now restores its window on construction and writes it back after
+ * each hit, so these tests need storage that actually round-trips rather than
+ * an empty cast -- otherwise every test exercises a code path that production
+ * never takes.
+ */
+function makeState() {
+    const store = new Map<string, unknown>();
+    let alarm: number | null = null;
+
+    return {
+        blockConcurrencyWhile: async (fn: () => Promise<void>) => fn(),
+        storage: {
+            get: async (key: string) => store.get(key),
+            put: async (key: string, value: unknown) => {
+                // Structured-clone what goes in, matching real storage: a test
+                // that shared live objects would pass even if the object were
+                // storing Sets and Maps that cannot survive a round trip.
+                store.set(key, JSON.parse(JSON.stringify(value)));
+            },
+            getAlarm: async () => alarm,
+            setAlarm: async (time: number) => {
+                alarm = time;
+            },
+        },
+    } as unknown as DurableObjectState;
+}
+
+function makeSite(state: DurableObjectState = makeState()) {
+    return new RealtimeSite(state, {});
 }
 
 async function hit(site: RealtimeSite, body: Record<string, unknown>) {
@@ -209,5 +236,87 @@ describe("pushRealtimeHit", () => {
         await expect(
             pushRealtimeHit(namespace, { siteId: "s", visitor: "a" }),
         ).resolves.toBeUndefined();
+    });
+});
+
+describe("surviving eviction", () => {
+    async function hit(site: RealtimeSite, path: string, visitor = "v1") {
+        await site.fetch(
+            new Request("https://realtime/hit", {
+                method: "POST",
+                body: JSON.stringify({
+                    siteId: "s",
+                    visitor,
+                    path,
+                    kind: "pageview",
+                }),
+                headers: { "content-type": "application/json" },
+            }),
+        );
+    }
+
+    async function snapshotOf(site: RealtimeSite) {
+        const response = await site.fetch(
+            new Request("https://realtime/snapshot"),
+        );
+        return response.json() as Promise<{
+            activeVisitors: number;
+            viewsInWindow: number;
+            topPaths: [string, number][];
+        }>;
+    }
+
+    test("a restarted object still knows who is on the site", async () => {
+        // The bug this covers: the window lived only in memory, so an object
+        // evicted between two visits -- routine on a site getting about a hit
+        // a minute -- came back empty and reported nobody on a site that had
+        // just been visited. Every deploy did the same thing.
+        const state = makeState();
+
+        const first = makeSite(state);
+        await hit(first, "/one");
+
+        // A new instance over the same storage is what eviction, and a deploy,
+        // actually look like.
+        const revived = makeSite(state);
+        const snapshot = await snapshotOf(revived);
+
+        expect(snapshot.viewsInWindow).toBe(1);
+        expect(snapshot.activeVisitors).toBe(1);
+        expect(snapshot.topPaths).toEqual([["/one", 1]]);
+    });
+
+    test("a burst inside the write throttle is not lost", async () => {
+        // Throttling by skipping the write dropped precisely the newest state:
+        // of five hits in one second only the first survived, because the rest
+        // fell inside the window and nothing ever wrote them. The alarm is the
+        // trailing write that fixes it.
+        const state = makeState();
+        const site = makeSite(state);
+
+        for (const path of ["/a", "/b", "/c", "/d", "/e"]) {
+            await hit(site, path);
+        }
+
+        // The alarm Cloudflare would have delivered after the throttle.
+        await site.alarm();
+
+        const snapshot = await snapshotOf(makeSite(state));
+        expect(snapshot.viewsInWindow).toBe(5);
+        expect(snapshot.topPaths.length).toBe(5);
+    });
+
+    test("a window older than its own lifetime is discarded on restore", async () => {
+        const state = makeState();
+        const site = makeSite(state);
+        await hit(site, "/stale");
+
+        // Evicted for longer than the window is wide: everything restored has
+        // already expired and must not be reported as current activity.
+        vi.setSystemTime(Date.now() + 45 * 60_000);
+
+        const snapshot = await snapshotOf(makeSite(state));
+        expect(snapshot.viewsInWindow).toBe(0);
+        expect(snapshot.activeVisitors).toBe(0);
     });
 });

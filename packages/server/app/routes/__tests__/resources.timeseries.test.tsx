@@ -63,15 +63,19 @@ describe("resources.timeseries loader", () => {
         });
 
         const data = await result;
+        // Days are re-keyed to one uniform format -- the UTC instant of the
+        // day's local midnight, which is what Analytics Engine itself emits in
+        // production. Mixing formats meant archived and live halves of the same
+        // day neither merged nor sorted against each other.
         expect(data.chartData).toEqual([
             {
-                date: "2024-01-15T00:00:00Z",
+                date: "2024-01-15 00:00:00",
                 views: 100,
                 visitors: 0,
                 bounceRate: 0,
             },
             {
-                date: "2024-01-16T00:00:00Z",
+                date: "2024-01-16 00:00:00",
                 views: 200,
                 visitors: 0,
                 bounceRate: 0,

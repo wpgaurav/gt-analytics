@@ -14,6 +14,10 @@ export default createConfig({
         "dist/*",
         ".react-router",
         "coverage",
+        // Wrangler's generated dev/deploy bundles. Transient, not authored,
+        // and they drown real findings -- a running dev server put nearly two
+        // thousand errors in this report.
+        ".wrangler",
     ],
     includeReact: true,
     includeTypeScript: true,

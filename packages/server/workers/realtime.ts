@@ -17,9 +17,11 @@
  * NOTE ON LOCAL DEVELOPMENT: `pnpm dev` (react-router dev) cannot run this.
  * Its cloudflareDevProxy proxies bindings via getPlatformProxy but does not
  * execute the Worker script, so the class is not registered and every call
- * fails with "no such actor class". The realtime page degrades to "no data"
- * rather than erroring. Use `pnpm preview` (wrangler dev), which runs the real
- * Worker, to exercise this locally.
+ * fails with "no such actor class". `wrangler dev --remote` cannot run it
+ * either -- Cloudflare dropped remote-mode support for Durable Objects, and
+ * every snapshot comes back as "unavailable", which looks exactly like a
+ * production fault. Use plain `wrangler dev` (`pnpm preview`), which runs the
+ * real Worker locally.
  */
 
 /** Buckets kept for the activity sparkline. */
@@ -30,6 +32,9 @@ const ACTIVE_MINUTES = 5;
 
 /** Entries in the live feed. */
 const FEED_LIMIT = 50;
+
+/** How often the window is written to storage, at most. */
+const SAVE_INTERVAL_MS = 1000;
 
 /**
  * Ceiling on distinct visitors tracked per minute. Above this the count is
@@ -49,6 +54,21 @@ export interface RealtimeHit {
     /** "pageview" | "conversion" | "event" */
     kind?: string;
     name?: string;
+}
+
+/** The window as it is written to storage: Sets and Maps flattened to arrays. */
+interface StoredWindow {
+    buckets: {
+        minute: number;
+        views: number;
+        conversions: number;
+        visitors: string[];
+        paths: [string, number][];
+        channels: [string, number][];
+        countries: [string, number][];
+        referrers: [string, number][];
+    }[];
+    feed: RealtimeSnapshot["feed"];
 }
 
 interface MinuteBucket {
@@ -90,20 +110,34 @@ export interface RealtimeSnapshot {
 export class RealtimeSite {
     private buckets = new Map<number, MinuteBucket>();
     private feed: RealtimeSnapshot["feed"] = [];
+    private state: DurableObjectState;
+    private lastSave = 0;
+    private ready: Promise<void>;
 
-    // `state` is required by the Durable Object contract even though this
-    // object keeps everything in memory.
-    constructor(
-        _state: DurableObjectState,
-        _env: unknown,
-    ) {}
+    constructor(state: DurableObjectState, _env: unknown) {
+        this.state = state;
+
+        // Restore before any request is served. A snapshot arriving in the
+        // same instant as construction would otherwise answer from an empty
+        // window and report nobody on a site that has visitors.
+        //
+        // Held as a promise and awaited in fetch as well as passed to
+        // blockConcurrencyWhile: the runtime guarantee is the real mechanism,
+        // but depending on it alone makes the object silently wrong anywhere
+        // it is not honoured, and the failure looks like missing traffic
+        // rather than a broken contract.
+        this.ready = this.restore();
+        state.blockConcurrencyWhile(() => this.ready);
+    }
 
     async fetch(request: Request): Promise<Response> {
+        await this.ready;
         const url = new URL(request.url);
 
         if (request.method === "POST" && url.pathname === "/hit") {
             const hit = (await request.json()) as RealtimeHit;
             this.record(hit);
+            await this.persist();
             return new Response(null, { status: 204 });
         }
 
@@ -160,6 +194,103 @@ export class RealtimeSite {
             name: hit.name,
         });
         if (this.feed.length > FEED_LIMIT) this.feed.length = FEED_LIMIT;
+    }
+
+    /**
+     * Writes the window to storage so it survives eviction.
+     *
+     * This object was originally memory-only, on the reasoning that a
+     * thirty-minute window has no archival value. That is true, but it assumed
+     * eviction was rare. It is not: a Durable Object with no storage and no
+     * alarm is evicted once it goes idle, and a site receiving roughly a hit a
+     * minute is idle most of the time. The window was being lost between one
+     * visit and the next, so the dashboard showed nobody on a site that had
+     * just been visited. Deploys had the same effect, since they restart every
+     * object.
+     *
+     * Rate-limited to one write a second so a burst cannot turn a write per
+     * hit into the bottleneck, with an alarm guaranteeing the trailing write.
+     * Skipping the write outright would drop exactly the newest state -- three
+     * hits in one second persisted only the first, because the other two were
+     * inside the window and nothing ever came back for them. An alarm is
+     * durable and survives eviction, which a timer would not.
+     */
+    private async persist() {
+        const now = Date.now();
+
+        if (now - this.lastSave < SAVE_INTERVAL_MS) {
+            try {
+                if ((await this.state.storage.getAlarm()) === null) {
+                    await this.state.storage.setAlarm(
+                        this.lastSave + SAVE_INTERVAL_MS,
+                    );
+                }
+            } catch (error) {
+                console.error("realtime alarm failed", error);
+            }
+            return;
+        }
+
+        await this.write();
+    }
+
+    /** Alarm handler: the trailing write after a throttled burst. */
+    async alarm() {
+        await this.ready;
+        await this.write();
+    }
+
+    private async write() {
+        this.lastSave = Date.now();
+
+        try {
+            await this.state.storage.put("window", {
+                buckets: [...this.buckets.values()].map((bucket) => ({
+                    minute: bucket.minute,
+                    views: bucket.views,
+                    conversions: bucket.conversions,
+                    // Sets and Maps do not survive structured storage in a
+                    // form that round-trips, so they go as arrays.
+                    visitors: [...bucket.visitors],
+                    paths: [...bucket.paths],
+                    channels: [...bucket.channels],
+                    countries: [...bucket.countries],
+                    referrers: [...bucket.referrers],
+                })),
+                feed: this.feed,
+            });
+        } catch (error) {
+            // Real-time is a convenience view. A storage failure must not turn
+            // a hit into an error the collector has to handle.
+            console.error("realtime persist failed", error);
+        }
+    }
+
+    private async restore() {
+        try {
+            const saved = await this.state.storage.get<StoredWindow>("window");
+            if (!saved) return;
+
+            for (const bucket of saved.buckets ?? []) {
+                this.buckets.set(bucket.minute, {
+                    minute: bucket.minute,
+                    views: bucket.views,
+                    conversions: bucket.conversions,
+                    visitors: new Set(bucket.visitors),
+                    paths: new Map(bucket.paths),
+                    channels: new Map(bucket.channels),
+                    countries: new Map(bucket.countries),
+                    referrers: new Map(bucket.referrers),
+                });
+            }
+            this.feed = saved.feed ?? [];
+
+            // The object may have been evicted for longer than the window is
+            // wide, in which case everything restored is already expired.
+            this.prune(Math.floor(Date.now() / 60_000));
+        } catch (error) {
+            console.error("realtime restore failed", error);
+        }
     }
 
     private prune(currentMinute: number) {

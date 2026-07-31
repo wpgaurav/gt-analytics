@@ -162,6 +162,12 @@ export const ReferrerCard = ({
                                                             group.host,
                                                     })
                                                 }
+                                                onFilterUrl={(url) =>
+                                                    onFilterChange({
+                                                        ...filters,
+                                                        referrer: url,
+                                                    })
+                                                }
                                             />
                                         </td>
                                         <td className="num">
@@ -185,10 +191,12 @@ function SourceCell({
     group,
     formatter,
     onFilter,
+    onFilterUrl,
 }: {
     group: Group;
     formatter: Intl.NumberFormat;
     onFilter: () => void;
+    onFilterUrl: (url: string) => void;
 }) {
     const label = group.name;
     const favicon = `/favicon?url=${encodeURIComponent(
@@ -240,21 +248,35 @@ function SourceCell({
                     const href = absoluteUrl(item.url);
                     return (
                         <li key={item.url}>
-                            {href ? (
-                                <a
-                                    href={href}
-                                    target="_blank"
-                                    rel="noreferrer"
+                            {/* Clicking a source narrows the dashboard to it.
+                                Leaving the site is the rarer intent, so it
+                                gets the small icon rather than the whole row
+                                -- the same split the group row and the pages
+                                table already use. */}
+                            <span className="source__url-label">
+                                <button
+                                    type="button"
                                     className="source__url"
-                                    title={href}
+                                    onClick={() => onFilterUrl(item.url)}
+                                    title={`Filter by ${displayUrl(item.url)}`}
                                 >
                                     {displayUrl(item.url)}
-                                </a>
-                            ) : (
-                                <span className="source__url" title={item.url}>
-                                    {displayUrl(item.url)}
-                                </span>
-                            )}
+                                </button>
+                                {href && (
+                                    <a
+                                        href={href}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        className="row-label__open"
+                                        aria-label={`Open ${href} in a new tab`}
+                                    >
+                                        <Icon
+                                            name="arrow-up-right-from-square"
+                                            size={11}
+                                        />
+                                    </a>
+                                )}
+                            </span>
                             <span className="source__url-count">
                                 {formatter.format(item.visitors)} /{" "}
                                 {formatter.format(item.views)}
