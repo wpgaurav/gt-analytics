@@ -11,7 +11,6 @@ import {
 
 import { useMemo } from "react";
 
-import { Card } from "./ui/card";
 
 interface TimeSeriesChartProps {
     data: Array<{
@@ -43,26 +42,53 @@ function CustomTooltip(props: any) {
     });
     if (active && payload && payload.length) {
         return (
-            <Card className="p-2 shadow-lg leading-normal">
-                <div className="font-semibold">{formattedDate}</div>
-                <div className="before:content-['•'] before:text-border before:font-bold">
-                    {" "}
-                    {`${payload[1].value} visitors`}
-                </div>
-                <div className="before:content-['•'] before:text-barchart before:font-bold">
-                    {" "}
-                    {`${payload[0].value} views`}
-                </div>
-                <div className="before:content-['•'] before:text-paldarkgrey before:font-bold">
-                    {" "}
-                    {`${payload[2].value}% bounce rate`}
-                </div>
-            </Card>
+            <div className="chart-tooltip">
+                <div className="chart-tooltip__date">{formattedDate}</div>
+                <ul className="chart-tooltip__list">
+                    <li>
+                        <span
+                            className="chart-tooltip__swatch"
+                            style={{ background: CHART.visitors }}
+                        />
+                        {`${payload[1].value} visitors`}
+                    </li>
+                    <li>
+                        <span
+                            className="chart-tooltip__swatch"
+                            style={{ background: CHART.views }}
+                        />
+                        {`${payload[0].value} views`}
+                    </li>
+                    <li>
+                        <span
+                            className="chart-tooltip__swatch"
+                            style={{ background: CHART.bounce }}
+                        />
+                        {`${payload[2].value}% bounce rate`}
+                    </li>
+                </ul>
+            </div>
         );
     } else {
         return null;
     }
 }
+
+/**
+ * Chart colours, mirroring the CFDS tokens.
+ *
+ * These are literals rather than var(--brand-500) because recharts writes them
+ * straight into SVG presentation attributes, where custom properties do not
+ * resolve. Keep them in step with core-forms.css and the categorical palette
+ * in core-forms-dashboard.css.
+ */
+const CHART = {
+    views: "#8fadff", // --brand-300
+    visitors: "#2f63f5", // --brand-500
+    bounce: "#64748b", // --ink-500
+    grid: "#e2e8f0", // --ink-200
+    axis: "#64748b", // --ink-500
+};
 
 export default function TimeSeriesChart({
     data,
@@ -139,14 +165,14 @@ export default function TimeSeriesChart({
                     bottom: 0,
                 }}
             >
-                <CartesianGrid strokeDasharray="3 3" />
+                <CartesianGrid strokeDasharray="3 3" stroke={CHART.grid} vertical={false} />
                 <XAxis
                     dataKey="date"
                     // tickLine={false}
                     tickMargin={8}
                     ticks={xAxisTicks}
                     tickFormatter={xAxisDateFormatter}
-                    tick={{ fill: "grey", fontSize: 14 }}
+                    tick={{ fill: CHART.axis, fontSize: 12 }}
                 />
 
                 {/* manually setting maxViews vs using recharts "dataMax" key cause it doesnt seem to work */}
@@ -157,7 +183,7 @@ export default function TimeSeriesChart({
                     tickLine={false}
                     tickMargin={5}
                     ticks={yAxisCountTicks}
-                    tick={{ fill: "grey", fontSize: 14 }}
+                    tick={{ fill: CHART.axis, fontSize: 12 }}
                 />
                 <YAxis
                     yAxisId="bounceRate"
@@ -168,26 +194,28 @@ export default function TimeSeriesChart({
 
                 <Tooltip content={<CustomTooltip />} />
 
-                {/* NOTE: colors defined in globals.css/tailwind.config.js */}
                 <Area
                     yAxisId="count"
                     dataKey="views"
-                    stroke="#F46A3D"
+                    stroke={CHART.views}
                     strokeWidth="2"
-                    fill="#F99C35"
+                    fill={CHART.views}
+                    fillOpacity={0.35}
                 />
                 <Area
                     yAxisId="count"
                     dataKey="visitors"
-                    stroke="#F46A3D"
+                    stroke={CHART.visitors}
                     strokeWidth="2"
-                    fill="#f96d3e"
+                    fill={CHART.visitors}
+                    fillOpacity={0.18}
                 />
                 <Line
                     yAxisId="bounceRate"
                     dataKey="bounceRate"
-                    stroke="#56726C"
-                    strokeWidth="2"
+                    stroke={CHART.bounce}
+                    strokeWidth="1.5"
+                    strokeDasharray="4 3"
                     dot={false}
                 />
             </ComposedChart>

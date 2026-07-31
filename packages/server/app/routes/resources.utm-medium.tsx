@@ -51,6 +51,7 @@ export const UtmMediumCard = ({
             filters={filters}
             onClick={(utmMedium) => onFilterChange({ ...filters, utmMedium })}
             timezone={timezone}
+            title="UTM medium"
         />
     );
 };

@@ -51,6 +51,7 @@ export const UtmContentCard = ({
             filters={filters}
             onClick={(utmContent) => onFilterChange({ ...filters, utmContent })}
             timezone={timezone}
+            title="UTM content"
         />
     );
 };

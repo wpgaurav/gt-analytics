@@ -53,6 +53,7 @@ export const BrowserVersionCard = ({
             }
             filters={filters}
             timezone={timezone}
+            title="Browser versions"
         />
     );
 };

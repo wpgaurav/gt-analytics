@@ -6,7 +6,6 @@ import {
 } from "~/lib/utils";
 import { useEffect } from "react";
 import { useFetcher } from "react-router";
-import { Card } from "~/components/ui/card";
 import { SearchFilters } from "~/lib/types";
 import { requireApiAuth } from "~/lib/api-auth";
 
@@ -88,39 +87,33 @@ export const StatsCard = ({
     }, [siteId, interval, filters, timezone]);
 
     return (
-        <Card>
-            <div className="p-4 pl-6">
-                <div className="grid grid-cols-3 gap-10 items-end">
-                    <div>
-                        <div className="text-md sm:text-lg">Visitors</div>
-                        <div className="text-4xl">
-                            {visitors ? countFormatter.format(visitors) : "-"}
-                        </div>
+        <section className="card">
+            <div className="card-body">
+                <div className="kpis">
+                    <div className="kpi kpi--primary">
+                        <span className="kpi__value">
+                            {visitors ? countFormatter.format(visitors) : "—"}
+                        </span>
+                        <span className="kpi__label">Visitors</span>
                     </div>
-
-                    <div>
-                        <div className="text-md sm:text-lg">Views</div>
-                        <div className="text-4xl">
-                            {views ? countFormatter.format(views) : "-"}
-                        </div>
+                    <div className="kpi">
+                        <span className="kpi__value">
+                            {views ? countFormatter.format(views) : "—"}
+                        </span>
+                        <span className="kpi__label">Views</span>
                     </div>
-                    <div>
-                        <div className="text-md sm:text-lg">
-                            <span>
-                                Bounce
-                                <span className="hidden sm:inline"> Rate</span>
-                            </span>
-                        </div>
-                        <div className="text-4xl">
+                    <div className="kpi">
+                        <span className="kpi__value">
                             {hasSufficientBounceData
                                 ? bounceRate !== undefined
                                     ? `${Math.round(bounceRate * 100)}%`
-                                    : "-"
+                                    : "—"
                                 : "n/a"}
-                        </div>
+                        </span>
+                        <span className="kpi__label">Bounce rate</span>
                     </div>
                 </div>
             </div>
-        </Card>
+        </section>
     );
 };

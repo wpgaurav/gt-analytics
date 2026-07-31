@@ -38,12 +38,15 @@ export const PathsCard = ({
     filters,
     onFilterChange,
     timezone,
+    linkBuilder,
 }: {
     siteId: string;
     interval: string;
     filters: SearchFilters;
     onFilterChange: (filters: SearchFilters) => void;
     timezone: string;
+    /** Turns a recorded path into an absolute URL on the live site. */
+    linkBuilder?: (key: string) => string | null;
 }) => {
     return (
         <PaginatedTableCard
@@ -55,6 +58,8 @@ export const PathsCard = ({
             loaderUrl="/resources/paths"
             onClick={(path) => onFilterChange({ ...filters, path })}
             timezone={timezone}
+            linkBuilder={linkBuilder}
+            title="Pages"
         />
     );
 };

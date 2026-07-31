@@ -51,6 +51,7 @@ export const UtmSourceCard = ({
             filters={filters}
             onClick={(utmSource) => onFilterChange({ ...filters, utmSource })}
             timezone={timezone}
+            title="UTM source"
         />
     );
 };

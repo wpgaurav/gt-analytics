@@ -53,6 +53,7 @@ export const UtmCampaignCard = ({
                 onFilterChange({ ...filters, utmCampaign })
             }
             timezone={timezone}
+            title="UTM campaign"
         />
     );
 };

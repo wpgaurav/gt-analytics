@@ -174,6 +174,7 @@ describe("Dashboard route", () => {
                 filters: {},
                 siteId: "test-siteid",
                 sites: ["test-siteid"],
+                siteUrls: {},
                 intervalType: "DAY",
                 interval: "7d",
             });
@@ -200,6 +201,7 @@ describe("Dashboard route", () => {
                 filters: {},
                 siteId: "",
                 sites: [],
+                siteUrls: {},
                 intervalType: "DAY",
                 interval: "7d",
             });
@@ -308,17 +310,17 @@ describe("Dashboard route", () => {
 
         render(<RemixStub />);
 
-        await waitFor(() => screen.findByText("Path"));
-        expect(screen.getByText("Path")).toBeInTheDocument();
-        expect(screen.getByText("Referrer")).toBeInTheDocument();
-        expect(screen.getByText("Browser")).toBeInTheDocument();
-        expect(screen.getByText("Country")).toBeInTheDocument();
-        expect(screen.getByText("Device")).toBeInTheDocument();
-        expect(screen.getByText("UTM Source")).toBeInTheDocument();
-        expect(screen.getByText("UTM Medium")).toBeInTheDocument();
-        expect(screen.getByText("UTM Campaign")).toBeInTheDocument();
-        expect(screen.getByText("UTM Term")).toBeInTheDocument();
-        expect(screen.getByText("UTM Content")).toBeInTheDocument();
+        await waitFor(() => screen.findByText("Pages"));
+        expect(screen.getByText("Pages")).toBeInTheDocument();
+        expect(screen.getByText("Referrers")).toBeInTheDocument();
+        expect(screen.getByText("Browsers")).toBeInTheDocument();
+        expect(screen.getByText("Countries")).toBeInTheDocument();
+        expect(screen.getByText("Devices")).toBeInTheDocument();
+        expect(screen.getByText("UTM source")).toBeInTheDocument();
+        expect(screen.getByText("UTM medium")).toBeInTheDocument();
+        expect(screen.getByText("UTM campaign")).toBeInTheDocument();
+        expect(screen.getByText("UTM term")).toBeInTheDocument();
+        expect(screen.getByText("UTM content")).toBeInTheDocument();
     });
 
     const defaultMockedLoaderJson = {

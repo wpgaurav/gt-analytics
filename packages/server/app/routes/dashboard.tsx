@@ -1,20 +1,3 @@
-import {
-    Select,
-    SelectContent,
-    SelectItem,
-    SelectTrigger,
-    SelectValue,
-} from "~/components/ui/select";
-import {
-    Card,
-    CardContent,
-    CardDescription,
-    CardFooter,
-    CardHeader,
-    CardTitle,
-} from "~/components/ui/card";
-import { Button } from "~/components/ui/button";
-
 import type { LoaderFunctionArgs, MetaFunction } from "react-router";
 import {
     isRouteErrorResponse,
@@ -50,8 +33,8 @@ import { requireAuth } from "~/lib/auth";
 
 export const meta: MetaFunction = () => {
     return [
-        { title: "Counterscale: Web Analytics" },
-        { name: "description", content: "Counterscale: Web Analytics" },
+        { title: "Dashboard — GT Analytics" },
+        { name: "description", content: "GT Analytics" },
     ];
 };
 
@@ -111,6 +94,25 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
     const intervalType = getIntervalType(interval);
 
+    // Base URLs come from the managed sites table, so a recorded path can be
+    // turned back into a clickable link on the live site.
+    const siteUrls: Record<string, string> = {};
+    try {
+        const db: D1Database = context.cloudflare.env.CONTENT_DB;
+        const { results } = await db
+            .prepare(`SELECT site_id, wp_base_url FROM sites`)
+            .all();
+        for (const row of results ?? []) {
+            const id = String((row as Record<string, unknown>).site_id ?? "");
+            const base = (row as Record<string, unknown>).wp_base_url;
+            if (id && base) siteUrls[id] = String(base);
+        }
+    } catch (err) {
+        // A missing or unreachable content database must not take the
+        // dashboard down -- links simply degrade to plain text.
+        console.error("could not load site base URLs", err);
+    }
+
     // await all requests to AE then return the results
 
     let out;
@@ -120,6 +122,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
             sites: (await sitesByHits).map(
                 ([site, _]: [string, number]) => site,
             ),
+            siteUrls,
             intervalType,
             interval,
             filters,
@@ -180,172 +183,107 @@ export default function Dashboard() {
 
     const userTimezone = getUserTimezone();
 
+    // Recorded paths are site-relative; the managed base URL turns them back
+    // into something clickable. Sites without one (non-WordPress properties)
+    // simply render as text.
+    const siteBase = data.siteUrls?.[data.siteId];
+    const pathLinkBuilder = siteBase
+        ? (path: string) =>
+              path.startsWith("/") ? `${siteBase}${path}` : null
+        : undefined;
+
+    const cardProps = {
+        siteId: data.siteId,
+        interval: data.interval,
+        filters: data.filters,
+        onFilterChange: handleFilterChange,
+        timezone: userTimezone,
+    };
+
     return (
-        <div style={{ fontFamily: "system-ui, sans-serif", lineHeight: "1.8" }}>
-            <div className="w-full mb-4 flex gap-4 flex-wrap">
-                <div className="lg:basis-1/5-gap-4 sm:basis-1/4-gap-4 basis-1/2-gap-4">
-                    <Select
-                        defaultValue={data.siteId}
-                        onValueChange={(site) => changeSite(site)}
-                    >
-                        <SelectTrigger>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            {/* SelectItem explodes if given an empty string for `value` so coerce to @unknown */}
-                            {data.sites.map((siteId: string) => (
-                                <SelectItem
-                                    key={`k-${siteId}`}
-                                    value={siteId || "@unknown"}
-                                >
-                                    {siteId || "(unknown)"}
-                                </SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </div>
+        <>
+            <div className="toolbar">
+                <label className="visually-hidden" htmlFor="site-picker">
+                    Site
+                </label>
+                <select
+                    id="site-picker"
+                    className="select"
+                    value={data.siteId || "@unknown"}
+                    onChange={(e) => changeSite(e.target.value)}
+                >
+                    {data.sites.map((siteId: string) => (
+                        <option key={`k-${siteId}`} value={siteId || "@unknown"}>
+                            {siteId || "(unknown)"}
+                        </option>
+                    ))}
+                </select>
 
-                <div className="lg:basis-1/6-gap-4 sm:basis-1/5-gap-4 basis-1/3-gap-4">
-                    <Select
-                        defaultValue={data.interval}
-                        onValueChange={(interval) => changeInterval(interval)}
-                    >
-                        <SelectTrigger>
-                            <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                            <SelectItem value="today">Today</SelectItem>
-                            <SelectItem value="yesterday">Yesterday</SelectItem>
-                            <SelectItem value="1d">24 hours</SelectItem>
-                            <SelectItem value="7d">7 days</SelectItem>
-                            <SelectItem value="30d">30 days</SelectItem>
-                            <SelectItem value="90d">90 days</SelectItem>
-                        </SelectContent>
-                    </Select>
-                </div>
+                <label className="visually-hidden" htmlFor="interval-picker">
+                    Time range
+                </label>
+                <select
+                    id="interval-picker"
+                    className="select"
+                    value={data.interval}
+                    onChange={(e) => changeInterval(e.target.value)}
+                >
+                    <option value="today">Today</option>
+                    <option value="yesterday">Yesterday</option>
+                    <option value="1d">24 hours</option>
+                    <option value="7d">7 days</option>
+                    <option value="30d">30 days</option>
+                    <option value="90d">90 days</option>
+                </select>
 
-                <div className="basis-auto flex">
-                    <div className="m-auto">
-                        <SearchFilterBadges
-                            filters={data.filters}
-                            onFilterDelete={handleFilterDelete}
-                        />
-                    </div>
-                </div>
+                <SearchFilterBadges
+                    filters={data.filters}
+                    onFilterDelete={handleFilterDelete}
+                />
             </div>
 
-            <div className="transition" style={{ opacity: loading ? 0.6 : 1 }}>
-                <div className="w-full mb-4">
-                    <StatsCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        timezone={userTimezone}
-                    />
+            <div className={loading ? "dashboard is-busy" : "dashboard"}>
+                <StatsCard
+                    siteId={data.siteId}
+                    interval={data.interval}
+                    filters={data.filters}
+                    timezone={userTimezone}
+                />
+
+                <TimeSeriesCard
+                    siteId={data.siteId}
+                    interval={data.interval}
+                    filters={data.filters}
+                    timezone={userTimezone}
+                />
+
+                <div className="grid-cards grid-cards--2">
+                    <PathsCard {...cardProps} linkBuilder={pathLinkBuilder} />
+                    <ReferrerCard {...cardProps} />
                 </div>
-                <div className="w-full mb-4">
-                    <TimeSeriesCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        timezone={userTimezone}
-                    />
-                </div>
-                <div className="grid md:grid-cols-2 gap-4 mb-4">
-                    <PathsCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
-                    <ReferrerCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
-                </div>
-                <div className="grid md:grid-cols-3 gap-4 mb-4">
+
+                <div className="grid-cards grid-cards--3">
                     {data.filters && data.filters.browserName ? (
-                        <BrowserVersionCard
-                            siteId={data.siteId}
-                            interval={data.interval}
-                            filters={data.filters}
-                            onFilterChange={handleFilterChange}
-                            timezone={userTimezone}
-                        />
+                        <BrowserVersionCard {...cardProps} />
                     ) : (
-                        <BrowserCard
-                            siteId={data.siteId}
-                            interval={data.interval}
-                            filters={data.filters}
-                            onFilterChange={handleFilterChange}
-                            timezone={userTimezone}
-                        />
+                        <BrowserCard {...cardProps} />
                     )}
-
-                    <CountryCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
-
-                    <DeviceCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
+                    <CountryCard {...cardProps} />
+                    <DeviceCard {...cardProps} />
                 </div>
-                <div className="grid md:grid-cols-3 gap-4 mb-4">
-                    <UtmSourceCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
 
-                    <UtmMediumCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
-
-                    <UtmCampaignCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
+                <div className="grid-cards grid-cards--3">
+                    <UtmSourceCard {...cardProps} />
+                    <UtmMediumCard {...cardProps} />
+                    <UtmCampaignCard {...cardProps} />
                 </div>
-                <div className="grid md:grid-cols-2 gap-4 mb-4">
-                    <UtmTermCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
 
-                    <UtmContentCard
-                        siteId={data.siteId}
-                        interval={data.interval}
-                        filters={data.filters}
-                        onFilterChange={handleFilterChange}
-                        timezone={userTimezone}
-                    />
+                <div className="grid-cards grid-cards--2">
+                    <UtmTermCard {...cardProps} />
+                    <UtmContentCard {...cardProps} />
                 </div>
             </div>
-        </div>
+        </>
     );
 }
 
@@ -485,69 +423,59 @@ export function ErrorBoundary() {
     console.error("Dashboard Error:", error);
 
     return (
-        <div className="flex items-center justify-center min-h-[400px] p-4">
-            <Card className="max-w-2xl w-full">
-                <CardHeader>
-                    <CardTitle className="flex items-center gap-2">
-                        <span className="text-2xl">⚠️</span>
-                        {errorInfo.title}
-                    </CardTitle>
-                    <CardDescription className="text-base">
-                        {errorInfo.message}
-                    </CardDescription>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                    <div className="bg-muted p-4 rounded-lg">
-                        <p className="text-sm text-muted-foreground">
-                            <strong>Suggestion:</strong> {errorInfo.suggestion}
-                        </p>
+        <div className="container-narrow errorbox">
+            <div className="card">
+                <div className="card-body">
+                    <header className="section-head errorbox__head">
+                        <span className="pill pill--error">Error</span>
+                        <h1>{errorInfo.title}</h1>
+                        <p>{errorInfo.message}</p>
+                    </header>
+
+                    <div className="flash flash--error">
+                        <strong>Suggestion:</strong> {errorInfo.suggestion}
                     </div>
 
                     {errorInfo.showContext && (siteId || interval !== "7d") && (
-                        <div className="bg-muted p-4 rounded-lg">
-                            <p className="text-sm text-muted-foreground mb-2">
-                                <strong>Context when error occurred:</strong>
-                            </p>
-                            <ul className="text-sm text-muted-foreground space-y-1">
+                        <>
+                            <h2 className="errorbox__context-title">
+                                Context when the error occurred
+                            </h2>
+                            <dl className="errorbox__context">
                                 {siteId && (
-                                    <li>
-                                        • Site:{" "}
-                                        <code className="bg-background px-1 rounded">
-                                            {siteId}
-                                        </code>
-                                    </li>
+                                    <>
+                                        <dt>Site</dt>
+                                        <dd className="mono">{siteId}</dd>
+                                    </>
                                 )}
-                                <li>
-                                    • Time Range:{" "}
-                                    <code className="bg-background px-1 rounded">
-                                        {interval}
-                                    </code>
-                                </li>
-                            </ul>
-                        </div>
+                                <dt>Time range</dt>
+                                <dd className="mono">{interval}</dd>
+                            </dl>
+                        </>
                     )}
 
                     {errorInfo.actionable && (
-                        <CardFooter className="flex gap-2 px-0 pb-0">
+                        <div className="app-actions">
                             {errorInfo.showRetry && (
-                                <Button
+                                <button
+                                    type="button"
+                                    className="btn btn-primary"
                                     onClick={handleRetry}
-                                    className="flex-1"
                                 >
-                                    Try Again
-                                </Button>
+                                    Try again
+                                </button>
                             )}
-                            <Button
-                                variant="outline"
+                            <button
+                                type="button"
+                                className="btn btn-secondary"
                                 onClick={handleGoHome}
-                                className="flex-1"
                             >
-                                Back to Dashboard
-                            </Button>
-                        </CardFooter>
+                                Back to dashboard
+                            </button>
+                        </div>
                     )}
-                </CardContent>
-            </Card>
+                </div>
+            </div>
         </div>
     );
 }

@@ -53,6 +53,7 @@ export const BrowserCard = ({
                 onFilterChange({ ...filters, browserName })
             }
             timezone={timezone}
+            title="Browsers"
         />
     );
 };

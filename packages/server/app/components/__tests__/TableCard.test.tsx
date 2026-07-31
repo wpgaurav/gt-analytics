@@ -49,13 +49,19 @@ describe("TableCard", () => {
         expect(externalLinks[0]).toHaveAttribute("href", "https://example.com");
         expect(externalLinks[0]).toHaveAttribute("target", "_blank");
         expect(externalLinks[0]).toHaveAttribute("rel", "noreferrer");
-        expect(externalLinks[0]).toHaveAttribute("aria-hidden", "true");
+        expect(externalLinks[0]).toHaveAttribute(
+            "aria-label",
+            "Open https://example.com in a new tab",
+        );
         
         expect(externalLinks[1]).toHaveAttribute("href", "http://test.com");
         expect(externalLinks[1]).toHaveAttribute("target", "_blank");
         expect(externalLinks[1]).toHaveAttribute("rel", "noreferrer");
-        expect(externalLinks[1]).toHaveAttribute("aria-hidden", "true");
-        
+        expect(externalLinks[1]).toHaveAttribute(
+            "aria-label",
+            "Open http://test.com in a new tab",
+        );
+                
         // Non-URL should not have an external link
         expect(screen.getByText("not-a-url")).toBeInTheDocument();
     });

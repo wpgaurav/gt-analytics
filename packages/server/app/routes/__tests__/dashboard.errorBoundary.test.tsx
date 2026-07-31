@@ -68,10 +68,10 @@ describe("Dashboard ErrorBoundary", () => {
                     "Please ensure CF_ACCOUNT_ID is properly configured in your environment variables.",
                 ),
             ).toBeInTheDocument();
-            expect(screen.queryByText("Try Again")).not.toBeInTheDocument();
+            expect(screen.queryByText("Try again")).not.toBeInTheDocument();
             // Configuration errors are not actionable, so no buttons should be shown
             expect(
-                screen.queryByText("Back to Dashboard"),
+                screen.queryByText("Back to dashboard"),
             ).not.toBeInTheDocument();
         });
 
@@ -97,7 +97,7 @@ describe("Dashboard ErrorBoundary", () => {
                     "Please ensure CF_BEARER_TOKEN is properly configured in your environment variables.",
                 ),
             ).toBeInTheDocument();
-            expect(screen.queryByText("Try Again")).not.toBeInTheDocument();
+            expect(screen.queryByText("Try again")).not.toBeInTheDocument();
         });
 
         test("displays server error for 500 status", () => {
@@ -120,7 +120,7 @@ describe("Dashboard ErrorBoundary", () => {
                     "This is likely a temporary issue. Please try again in a few moments.",
                 ),
             ).toBeInTheDocument();
-            expect(screen.getByText("Try Again")).toBeInTheDocument();
+            expect(screen.getByText("Try again")).toBeInTheDocument();
         });
 
         test("displays generic error for other HTTP status codes", () => {
@@ -142,7 +142,7 @@ describe("Dashboard ErrorBoundary", () => {
                     "Please try refreshing the page or contact support if the issue persists.",
                 ),
             ).toBeInTheDocument();
-            expect(screen.getByText("Try Again")).toBeInTheDocument();
+            expect(screen.getByText("Try again")).toBeInTheDocument();
         });
     });
 
@@ -170,7 +170,7 @@ describe("Dashboard ErrorBoundary", () => {
                     "This could be due to network issues or Analytics Engine being temporarily unavailable. Please try again in a few moments.",
                 ),
             ).toBeInTheDocument();
-            expect(screen.getByText("Try Again")).toBeInTheDocument();
+            expect(screen.getByText("Try again")).toBeInTheDocument();
         });
 
         test("displays authentication error", () => {
@@ -192,7 +192,7 @@ describe("Dashboard ErrorBoundary", () => {
                     "Please check your credentials and try logging in again.",
                 ),
             ).toBeInTheDocument();
-            expect(screen.queryByText("Try Again")).not.toBeInTheDocument();
+            expect(screen.queryByText("Try again")).not.toBeInTheDocument();
         });
 
         test("displays invalid interval error", () => {
@@ -233,7 +233,7 @@ describe("Dashboard ErrorBoundary", () => {
                     "Please try refreshing the page or contact support if the issue persists.",
                 ),
             ).toBeInTheDocument();
-            expect(screen.getByText("Try Again")).toBeInTheDocument();
+            expect(screen.getByText("Try again")).toBeInTheDocument();
         });
     });
 
@@ -250,7 +250,7 @@ describe("Dashboard ErrorBoundary", () => {
             render(<ErrorBoundary />);
 
             expect(
-                screen.getByText("Context when error occurred:"),
+                screen.getByText("Context when the error occurred"),
             ).toBeInTheDocument();
             expect(screen.getByText("example.com")).toBeInTheDocument();
             expect(screen.getByText("30d")).toBeInTheDocument();
@@ -268,7 +268,7 @@ describe("Dashboard ErrorBoundary", () => {
             render(<ErrorBoundary />);
 
             expect(
-                screen.queryByText("Context when error occurred:"),
+                screen.queryByText("Context when the error occurred"),
             ).not.toBeInTheDocument();
         });
     });
@@ -282,7 +282,7 @@ describe("Dashboard ErrorBoundary", () => {
 
             render(<ErrorBoundary />);
 
-            const tryAgainButton = screen.getByText("Try Again");
+            const tryAgainButton = screen.getByRole("button", { name: "Try again" });
             fireEvent.click(tryAgainButton);
 
             expect(mockReload).toHaveBeenCalledTimes(1);
@@ -296,7 +296,7 @@ describe("Dashboard ErrorBoundary", () => {
 
             render(<ErrorBoundary />);
 
-            const backButton = screen.getByText("Back to Dashboard");
+            const backButton = screen.getByRole("button", { name: "Back to dashboard" });
             fireEvent.click(backButton);
 
             expect(global.window.location.href).toBe("/dashboard");
@@ -341,13 +341,15 @@ describe("Dashboard ErrorBoundary", () => {
 
             const { container } = render(<ErrorBoundary />);
 
-            expect(screen.getByText("⚠️")).toBeInTheDocument();
-            expect(container.querySelector(".max-w-2xl")).toBeInTheDocument();
+            // The warning emoji was replaced by a labelled status pill, which
+            // screen readers announce instead of skipping.
+            expect(container.querySelector(".pill--error")).toBeInTheDocument();
+            expect(container.querySelector(".errorbox")).toBeInTheDocument();
             expect(
-                screen.getByRole("button", { name: "Try Again" }),
+                screen.getByRole("button", { name: "Try again" }),
             ).toBeInTheDocument();
             expect(
-                screen.getByRole("button", { name: "Back to Dashboard" }),
+                screen.getByRole("button", { name: "Back to dashboard" }),
             ).toBeInTheDocument();
         });
 

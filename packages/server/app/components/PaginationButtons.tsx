@@ -1,7 +1,5 @@
 import React from "react";
 
-import { ArrowLeft, ArrowRight } from "lucide-react";
-
 interface PaginationButtonsProps {
     page: number;
     hasMore: boolean;
@@ -13,34 +11,30 @@ const PaginationButtons: React.FC<PaginationButtonsProps> = ({
     hasMore,
     handlePagination,
 }) => {
+    const canGoBack = page > 1;
+
     return (
-        <div className="p-2 pr-0 grid grid-cols-[auto,2rem,2rem] text-right">
-            <div></div>
+        <nav className="pager" aria-label="Pagination">
+            <span className="pager__label">Page {page}</span>
             <button
-                onClick={() => {
-                    if (page > 1) handlePagination(page - 1);
-                }}
-                className={
-                    page > 1
-                        ? `text-primary hover:cursor-pointer`
-                        : `text-orange-300`
-                }
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => canGoBack && handlePagination(page - 1)}
+                disabled={!canGoBack}
+                aria-label="Previous page"
             >
-                <ArrowLeft />
+                Previous
             </button>
             <button
-                onClick={() => {
-                    if (hasMore) handlePagination(page + 1);
-                }}
-                className={
-                    hasMore
-                        ? "text-primary hover:cursor-pointer"
-                        : "text-orange-300"
-                }
+                type="button"
+                className="btn btn-secondary btn-sm"
+                onClick={() => hasMore && handlePagination(page + 1)}
+                disabled={!hasMore}
+                aria-label="Next page"
             >
-                <ArrowRight />
+                Next
             </button>
-        </div>
+        </nav>
     );
 };
 

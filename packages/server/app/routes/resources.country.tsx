@@ -75,6 +75,7 @@ export const CountryCard = ({
             filters={filters}
             onClick={(country) => onFilterChange({ ...filters, country })}
             timezone={timezone}
+            title="Countries"
         />
     );
 };

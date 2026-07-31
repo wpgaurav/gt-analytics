@@ -20,11 +20,11 @@ describe("NotFound", () => {
 
     // Check for main elements
     expect(screen.getByText("404")).toBeInTheDocument();
-    expect(screen.getByText("Oops! Page Not Found")).toBeInTheDocument();
+    expect(screen.getByText("Page not found")).toBeInTheDocument();
 
     // Check for home link
-    const homeLink = screen.getByText("Return Home");
+    const homeLink = screen.getByText("Back to dashboard");
     expect(homeLink).toBeInTheDocument();
-    expect(homeLink.closest("a")).toHaveAttribute("href", "/");
+    expect(homeLink.closest("a")).toHaveAttribute("href", "/dashboard");
   });
 }); 

@@ -7,7 +7,6 @@ import {
 } from "~/lib/utils";
 import { useEffect } from "react";
 import { useFetcher } from "react-router";
-import { Card, CardContent } from "~/components/ui/card";
 import TimeSeriesChart from "~/components/TimeSeriesChart";
 import { SearchFilters } from "~/lib/types";
 import { requireApiAuth } from "~/lib/api-auth";
@@ -94,17 +93,15 @@ export const TimeSeriesCard = ({
     }, [siteId, interval, filters, timezone]);
 
     return (
-        <Card>
-            <CardContent>
-                <div className="h-72 pt-6 -m-4 -mr-10 -ml-10 sm:-m-2 sm:-ml-6 sm:-mr-6">
-                    {chartData && (
-                        <TimeSeriesChart
-                            data={chartData}
-                            intervalType={intervalType}
-                        />
-                    )}
-                </div>
-            </CardContent>
-        </Card>
+        <section className="card">
+            <div className="card-body chart-body">
+                {chartData && (
+                    <TimeSeriesChart
+                        data={chartData}
+                        intervalType={intervalType}
+                    />
+                )}
+            </div>
+        </section>
     );
 };

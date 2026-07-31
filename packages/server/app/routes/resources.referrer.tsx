@@ -53,6 +53,7 @@ export const ReferrerCard = ({
             filters={filters}
             onClick={(referrer) => onFilterChange({ ...filters, referrer })}
             timezone={timezone}
+            title="Referrers"
         />
     );
 };

@@ -55,6 +55,7 @@ export const DeviceCard = ({
             labelFormatter={(label) =>
                 label.charAt(0).toUpperCase() + label.slice(1)
             }
+            title="Devices"
         />
     );
 };

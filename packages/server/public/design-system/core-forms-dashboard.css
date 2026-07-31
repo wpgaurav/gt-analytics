@@ -53,6 +53,22 @@
     min-height: calc(100vh - 68px);
 }
 
+/* CFDS hides .nav-links below 860px because its marketing nav expects the
+   hamburger and slide-down panel. This app has two links, so showing them is
+   simpler and cheaper than shipping the JS that panel needs -- and leaving
+   them hidden strands mobile users with no navigation at all. */
+@media (max-width: 859px) {
+    .nav .nav-links {
+        display: flex;
+        gap: var(--gap-md);
+        font-size: 0.92rem;
+    }
+
+    .nav .nav-inner {
+        gap: var(--gap-sm);
+    }
+}
+
 .app-head {
     display: flex;
     flex-wrap: wrap;
@@ -118,6 +134,14 @@
     margin-block-start: var(--gap-md);
 }
 
+/* Inside a grid the cards are laid out by the grid, but they are still
+   adjacent siblings, so the stacking margin above would push every card
+   except the first one down by a row-gap's worth. */
+.grid-cards > .card + .card,
+.kpis > .card + .card {
+    margin-block-start: 0;
+}
+
 .card-head {
     display: flex;
     align-items: center;
@@ -151,12 +175,115 @@
     grid-template-columns: 1fr;
 }
 
+/* Grid items default to min-width:auto, so a wide data table refuses to
+   shrink and pushes the whole page into horizontal scroll instead of
+   scrolling inside its own .table-wrap. Overriding to 0 lets the wrapper do
+   its job. */
+.grid-cards > * {
+    min-width: 0;
+}
+
 @media (min-width: 760px) {
     .grid-cards--2 { grid-template-columns: repeat(2, 1fr); }
 }
 
 @media (min-width: 960px) {
     .grid-cards--3 { grid-template-columns: repeat(3, 1fr); }
+}
+
+/* Dashboard stack: every direct child is a band of the report. */
+.dashboard > * + * {
+    margin-block-start: var(--gap-md);
+}
+
+.dashboard.is-busy {
+    opacity: 0.6;
+    transition: opacity var(--t-fast);
+}
+
+/* The chart needs a fixed block size for recharts' ResponsiveContainer to
+   have something to fill, and less inline padding than a normal card body so
+   the plot reaches closer to the edges. */
+.chart-body {
+    block-size: 300px;
+    padding-inline: var(--gap-sm);
+    padding-block-end: var(--gap-sm);
+}
+
+.chart-tooltip {
+    background: var(--bg);
+    border: 1px solid var(--ink-200);
+    border-radius: var(--r-md);
+    box-shadow: var(--shadow-md);
+    padding: var(--gap-sm) var(--gap-md);
+    font-size: 0.85rem;
+}
+
+.chart-tooltip__date {
+    font-weight: 650;
+    color: var(--ink-900);
+    margin-block-end: var(--gap-xs);
+}
+
+.chart-tooltip__list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    color: var(--ink-700);
+}
+
+.chart-tooltip__list li {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-xs);
+    font-variant-numeric: tabular-nums;
+}
+
+.chart-tooltip__swatch {
+    inline-size: 8px;
+    block-size: 8px;
+    border-radius: var(--r-full);
+    flex: none;
+}
+
+/* Standalone message pages (404, dashboard error boundary). */
+.errorbox {
+    margin-block-start: clamp(var(--gap-lg), 6vh, 64px);
+}
+
+.errorbox__head {
+    text-align: start;
+    margin-block-end: var(--gap-md);
+}
+
+.errorbox__head h1 {
+    margin-block: var(--gap-xs) var(--gap-xs);
+    font-size: 1.5rem;
+}
+
+.errorbox__head p {
+    margin: 0;
+    color: var(--ink-600);
+}
+
+.errorbox__context {
+    display: grid;
+    grid-template-columns: auto 1fr;
+    gap: var(--gap-xs) var(--gap-md);
+    margin: var(--gap-md) 0 0;
+    font-size: 0.88rem;
+}
+
+.errorbox__context dt {
+    color: var(--ink-500);
+}
+
+.errorbox__context dd {
+    margin: 0;
+    color: var(--ink-800);
 }
 
 /* --------------------------------------------------------------------------
@@ -253,6 +380,121 @@
     gap: var(--gap-xs);
     justify-content: flex-end;
     white-space: nowrap;
+}
+
+/* Row label: an inline share bar behind the text, the label itself (which may
+   filter the dashboard), and an open-in-new-tab affordance. */
+
+.row-label {
+    position: relative;
+    display: flex;
+    align-items: center;
+    min-height: 24px;
+}
+
+.row-label__bar {
+    position: absolute;
+    inset-block: -2px;
+    inset-inline-start: calc(var(--gap-md) * -1);
+    /* Scales from the row's own share of the visible page. */
+    inline-size: calc((100% + var(--gap-md) * 2) * var(--pct, 0));
+    background: var(--brand-50);
+    border-radius: var(--r-xs);
+    pointer-events: none;
+}
+
+.row-label__content {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    gap: var(--gap-xs);
+    min-width: 0;
+    max-width: 100%;
+}
+
+.row-label__icon {
+    inline-size: 16px;
+    block-size: 16px;
+    flex: none;
+    border-radius: var(--r-full);
+    background: var(--bg);
+}
+
+.row-label__filter {
+    padding: 0;
+    border: 0;
+    background: none;
+    font: inherit;
+    color: var(--ink-800);
+    text-align: start;
+    cursor: pointer;
+    max-width: 40ch;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.row-label__filter:hover {
+    color: var(--brand-600);
+    text-decoration: underline;
+}
+
+.row-label__open {
+    display: inline-flex;
+    flex: none;
+    color: var(--ink-400);
+    transition: color var(--t-fast);
+}
+
+.row-label__open:hover {
+    color: var(--brand-600);
+}
+
+/* Loading cards dim rather than collapse, so the layout does not jump. */
+.card.is-busy {
+    opacity: 0.6;
+    transition: opacity var(--t-fast);
+}
+
+/* Active filter pills. */
+.filter-badges {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--gap-xs);
+}
+
+.filter-badge {
+    text-transform: none;
+    letter-spacing: 0;
+    gap: var(--gap-xs);
+    padding-inline-end: var(--gap-xs);
+}
+
+.filter-badge__key {
+    opacity: 0.7;
+}
+
+.filter-badge__key::after {
+    content: ":";
+}
+
+.filter-badge__value {
+    font-weight: 700;
+}
+
+.filter-badge__remove {
+    display: inline-flex;
+    align-items: center;
+    padding: 2px;
+    border: 0;
+    border-radius: var(--r-full);
+    background: none;
+    color: inherit;
+    cursor: pointer;
+}
+
+.filter-badge__remove:hover {
+    background: var(--brand-100);
 }
 
 /* --------------------------------------------------------------------------

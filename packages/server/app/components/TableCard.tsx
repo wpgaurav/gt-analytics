@@ -1,155 +1,187 @@
-import { ExternalLink } from "lucide-react";
-import {
-    Table,
-    TableBody,
-    TableCell,
-    TableHead,
-    TableHeader,
-    TableRow,
-} from "~/components/ui/table";
-
 type CountByProperty = [string, string, string?][];
 
-function calculateCountPercentages(countByProperty: CountByProperty) {
+/**
+ * Share of the visible rows, used to draw the inline bar behind each label.
+ * Relative to what is on screen, not to the site total -- these tables are
+ * paginated top-N, so a page-relative bar is the honest comparison.
+ */
+function calculateCountPercentages(countByProperty: CountByProperty): number[] {
     const totalCount = countByProperty.reduce(
         (sum, row) => sum + parseInt(row[1]),
         0,
     );
 
-    return countByProperty.map((row) => {
-        const count = parseInt(row[1]);
-        const percentage = ((count / totalCount) * 100).toFixed(2);
-        return `${percentage}%`;
-    });
+    if (!totalCount) return countByProperty.map(() => 0);
+
+    return countByProperty.map((row) => parseInt(row[1]) / totalCount);
 }
+
+export interface TableCardProps {
+    countByProperty: CountByProperty;
+    columnHeaders: string[];
+    /** Applies the row as a dashboard filter. */
+    onClick?: (key: string) => void;
+    labelFormatter?: (label: string) => string;
+    /**
+     * Turns a row key into an absolute URL. Rows that resolve to one get an
+     * open-in-new-tab affordance next to the label, so a path in the report
+     * can be opened on the live site in one click.
+     */
+    linkBuilder?: (key: string) => string | null;
+}
+
 export default function TableCard({
     countByProperty,
     columnHeaders,
     onClick,
     labelFormatter,
-}: {
-    countByProperty: CountByProperty;
-    columnHeaders: string[];
-    onClick?: (key: string) => void;
-    labelFormatter?: (label: string) => string;
-}) {
-    const barChartPercentages = calculateCountPercentages(countByProperty);
-
+    linkBuilder,
+}: TableCardProps) {
+    const shares = calculateCountPercentages(countByProperty);
     const countFormatter = Intl.NumberFormat("en", { notation: "compact" });
+    const headers = columnHeaders || [];
 
-    const gridCols =
-        (columnHeaders || []).length === 3
-            ? "grid-cols-[minmax(0,1fr),minmax(0,8ch),minmax(0,8ch)]"
-            : "grid-cols-[minmax(0,1fr),minmax(0,8ch)]";
+    if (!countByProperty || countByProperty.length === 0) {
+        return (
+            <div className="empty-state">
+                <p>No data for this period.</p>
+            </div>
+        );
+    }
 
     return (
-        <Table>
-            <TableHeader>
-                <TableRow className={`${gridCols}`}>
-                    {(columnHeaders || []).map((header: string, index) => (
-                        <TableHead
-                            key={header}
-                            className={
-                                index === 0
-                                    ? "text-left"
-                                    : "text-right pr-4 pl-0"
-                            }
-                        >
-                            {header}
-                        </TableHead>
-                    ))}
-                </TableRow>
-            </TableHeader>
-            <TableBody>
-                {(countByProperty || []).map((item, index) => {
-                    const desc = item[0];
+        <div className="table-wrap">
+            <table className="data-table">
+                <thead>
+                    <tr>
+                        {headers.map((header, index) => (
+                            <th
+                                key={header}
+                                className={index === 0 ? "col-main" : "num"}
+                                scope="col"
+                            >
+                                {header}
+                            </th>
+                        ))}
+                    </tr>
+                </thead>
+                <tbody>
+                    {countByProperty.map((item, index) => {
+                        const desc = item[0];
 
-                    // the description can be either a single string (that is both the key and the label),
-                    // or a tuple of type [key, label]
-                    const [key, label] = Array.isArray(desc)
-                        ? [desc[0], desc[1] || "(unknown)"]
-                        : [desc, desc || "(unknown)"];
+                        // The description is either a plain string (key and
+                        // label in one) or a [key, label] tuple.
+                        const [key, label] = Array.isArray(desc)
+                            ? [desc[0], desc[1] || "(unknown)"]
+                            : [desc, desc || "(unknown)"];
 
-                    const formattedLabel =
-                        labelFormatter && typeof label === "string"
-                            ? labelFormatter(label)
-                            : label;
+                        const formattedLabel =
+                            labelFormatter && typeof label === "string"
+                                ? labelFormatter(label)
+                                : label;
 
-                    return (
-                        <TableRow
-                            key={key}
-                            className={`group [&_td]:last:rounded-b-md ${gridCols}`}
-                            width={barChartPercentages[index]}
-                        >
-                            <TableCell className="overflow-hidden font-medium min-w-48 whitespace-normal relative flex items-center justify-start gap-2">
-                                {/^https?:\/\//.test(label) ? (
-                                    <>
-                                        <img
-                                            src={`/favicon?url=${encodeURIComponent(label)}`}
-                                            alt="Favicon"
-                                            className="w-5 h-5 mr-1 bg-white p-0.5 rounded-full"
-                                            onError={(e) => {
-                                                // Fallback to external link icon if favicon fails to load
-                                                const target =
-                                                    e.target as HTMLImageElement;
-                                                target.style.display = "none";
-                                            }}
-                                        />
-                                        {onClick ? (
-                                            <button
-                                                onClick={() =>
-                                                    onClick(key as string)
-                                                }
-                                                className="hover:underline select-text text-left truncate"
-                                            >
-                                                {formattedLabel}
-                                            </button>
-                                        ) : (
-                                            formattedLabel
-                                        )}
-                                        <a
-                                            href={label}
-                                            target={"_blank"}
-                                            rel="noreferrer"
+                        const isExternalUrl = /^https?:\/\//.test(String(label));
+                        const href = isExternalUrl
+                            ? String(label)
+                            : linkBuilder?.(String(key)) || null;
+
+                        return (
+                            <tr key={String(key)}>
+                                <td className="col-main">
+                                    <div className="row-label">
+                                        <span
+                                            className="row-label__bar"
+                                            style={
+                                                {
+                                                    "--pct": shares[index],
+                                                } as React.CSSProperties
+                                            }
                                             aria-hidden="true"
-                                            className="inline whitespace-nowrap ml-1"
-                                        >
-                                            <ExternalLink size={16} />
-                                        </a>
-                                    </>
-                                ) : (
-                                    <>
-                                        {onClick ? (
-                                            <button
-                                                onClick={() =>
-                                                    onClick(key as string)
-                                                }
-                                                className="hover:underline select-text text-left truncate"
-                                            >
-                                                {formattedLabel}
-                                            </button>
-                                        ) : (
-                                            formattedLabel
+                                        />
+                                        <span className="row-label__content">
+                                            {isExternalUrl && (
+                                                <img
+                                                    src={`/favicon?url=${encodeURIComponent(String(label))}`}
+                                                    alt=""
+                                                    className="row-label__icon"
+                                                    onError={(e) => {
+                                                        (
+                                                            e.target as HTMLImageElement
+                                                        ).style.display = "none";
+                                                    }}
+                                                />
+                                            )}
+
+                                            {onClick ? (
+                                                <button
+                                                    type="button"
+                                                    className="row-label__filter"
+                                                    onClick={() =>
+                                                        onClick(String(key))
+                                                    }
+                                                    title="Filter by this value"
+                                                >
+                                                    {formattedLabel}
+                                                </button>
+                                            ) : (
+                                                <span className="truncate">
+                                                    {formattedLabel}
+                                                </span>
+                                            )}
+
+                                            {href && (
+                                                <a
+                                                    href={href}
+                                                    target="_blank"
+                                                    rel="noreferrer"
+                                                    className="row-label__open"
+                                                    title={`Open ${href}`}
+                                                    aria-label={`Open ${formattedLabel} in a new tab`}
+                                                >
+                                                    <OpenIcon />
+                                                </a>
+                                            )}
+                                        </span>
+                                    </div>
+                                </td>
+
+                                <td className="num">
+                                    {countFormatter.format(parseInt(item[1], 10))}
+                                </td>
+
+                                {item.length > 2 && item[2] !== undefined && (
+                                    <td className="num">
+                                        {countFormatter.format(
+                                            parseInt(item[2], 10),
                                         )}
-                                    </>
+                                    </td>
                                 )}
-                            </TableCell>
+                            </tr>
+                        );
+                    })}
+                </tbody>
+            </table>
+        </div>
+    );
+}
 
-                            <TableCell className="text-right min-w-16">
-                                {countFormatter.format(parseInt(item[1], 10))}
-                            </TableCell>
-
-                            {item.length > 2 && item[2] !== undefined && (
-                                <TableCell className="text-right min-w-16">
-                                    {countFormatter.format(
-                                        parseInt(item[2], 10),
-                                    )}
-                                </TableCell>
-                            )}
-                        </TableRow>
-                    );
-                })}
-            </TableBody>
-        </Table>
+function OpenIcon() {
+    return (
+        <svg
+            width="13"
+            height="13"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2.2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+            focusable="false"
+        >
+            <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" />
+            <polyline points="15 3 21 3 21 9" />
+            <line x1="10" y1="14" x2="21" y2="3" />
+        </svg>
     );
 }
