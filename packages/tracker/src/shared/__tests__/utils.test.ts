@@ -139,6 +139,34 @@ describe("Shared Utils", () => {
             expect(result).toBe("");
         });
 
+        it("should accept a bare hostname as well as a full URL", () => {
+            // Browser callers pass a hostname; the server-side module passes an
+            // origin. Both have to be recognised as self.
+            expect(
+                getReferrer("example.com", "https://example.com/prev"),
+            ).toBe("");
+            expect(
+                getReferrer("https://example.com", "https://example.com/prev"),
+            ).toBe("");
+        });
+
+        it("should not treat a host that merely contains the site name as self", () => {
+            // The old check was a substring test, so these were silently
+            // discarded as internal traffic.
+            expect(
+                getReferrer("example.com", "https://notexample.com/page"),
+            ).toBe("https://notexample.com/page");
+            expect(
+                getReferrer("example.com", "https://example.com.evil.net/x"),
+            ).toBe("https://example.com.evil.net/x");
+        });
+
+        it("should treat a subdomain of the site as self", () => {
+            expect(
+                getReferrer("example.com", "https://blog.example.com/post"),
+            ).toBe("");
+        });
+
         it("should return referrer without query params for external referrer", () => {
             const result = getReferrer(
                 "https://example.com",

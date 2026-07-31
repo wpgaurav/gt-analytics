@@ -37,7 +37,10 @@ export function getReferrer(hostname: string, referrer: string): string {
     // referrer that merely *contains* the site's name -- "notexample.com" and
     // "example.com.evil.net" were both silently discarded as internal -- while
     // still counting a subdomain as external. Parse and compare properly.
-    const self = stripWww(hostname);
+    // Callers pass either a bare hostname or a full URL -- the server-side
+    // module hands over an origin -- so normalise both sides the same way
+    // rather than assuming one shape.
+    const self = stripWww(hostnameOf(hostname));
     const referrerHostname = stripWww(hostnameOf(referrer));
 
     if (self && referrerHostname) {
