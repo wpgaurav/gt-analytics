@@ -1,22 +1,32 @@
 {
     "main": "./workers/app.ts",
-    "name": "counterscale",
+    "name": "counterscale-gauravtiwari",
     "compatibility_flags": ["nodejs_compat_v2"],
     "compatibility_date": "2024-12-13",
     "assets": {
         "binding": "ASSETS",
         "directory": "./build/client"
     },
+    "routes": [
+        {
+            "pattern": "stats.gauravtiwari.org",
+            "custom_domain": true
+        }
+    ],
+    "vars": {
+        "VERSION": "3.4.1",
+        "CF_AE_DATASET": "counterscale_gauravtiwari_metrics"
+    },
     "analytics_engine_datasets": [
         {
             "binding": "WEB_COUNTER_AE",
-            "dataset": "metricsDataset"
+            "dataset": "counterscale_gauravtiwari_metrics"
         }
     ],
     "r2_buckets": [
         {
-            "bucket_name": "counterscale-daily-rollups",
-            "preview_bucket_name": "counterscale-daily-rollups-dev",
+            "bucket_name": "counterscale-gauravtiwari-daily-rollups",
+            "preview_bucket_name": "counterscale-gauravtiwari-daily-rollups-dev",
             "binding": "DAILY_ROLLUPS"
         }
     ],
