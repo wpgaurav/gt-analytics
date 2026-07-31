@@ -1,5 +1,9 @@
 /**
- * Conversion tracking for gauravtiwari.org.
+ * Conversion tracking for the GT sites.
+ *
+ * One file for all four. Every hook is feature-detected -- a site without
+ * Fluent Cart simply never matches those selectors -- so there is nothing to
+ * keep in step per site.
  *
  * Drop this in after the GT Analytics tracker script. It adds nothing to the
  * page's critical path: every listener is delegated from `document`, so it
@@ -17,7 +21,7 @@
  *                     them entirely -- they look like internal navigation.
  *   add_to_cart       [data-fluent-cart-add-to-cart-button]
  *   begin_checkout    Buy Now buttons, the modal opening, and /checkout/
- *   purchase          /receipt/?order_hash=... , deduplicated per order
+ *   purchase          any URL carrying ?order_hash=, deduplicated per order
  *   lead              Core Forms 'cf-success', which the plugin dispatches on
  *                     the form element after a successful AJAX submit. Bound
  *                     rather than 'submit' because submit fires on attempts,
@@ -29,6 +33,23 @@
 (function () {
     "use strict";
 
+    /**
+     * Buffer for calls made before the tracker finishes loading.
+     *
+     * The tracker tag is `defer`, so it executes after this block is parsed.
+     * Click handlers are fine -- nobody clicks that fast -- but the purchase
+     * check below runs immediately at load, and without this it would find no
+     * `gta` and be dropped. Silently: it would also have marked the order as
+     * already recorded, so it could never fire again.
+     *
+     * The tracker drains `window.gta.q` when it initialises.
+     */
+    window.gta =
+        window.gta ||
+        function () {
+            (window.gta.q = window.gta.q || []).push(arguments);
+        };
+
     var ORIGIN = window.location.origin;
 
     /**
@@ -39,10 +60,19 @@
      * silently records nothing. Here a new form counts as a lead until it is
      * explicitly excluded, which is the safer direction to be wrong in.
      */
-    var NON_LEAD_FORMS = {
-        1163801: "support_request", // Support request
-        1093806: "contributor_pitch", // Write for Us
+    var NON_LEAD_FORMS_BY_HOST = {
+        "gauravtiwari.org": {
+            1163801: "support_request", // Support request
+            1093806: "contributor_pitch", // Write for Us
+        },
     };
+
+    // Scoped by host because a form ID is a WordPress post ID, and the same
+    // number is a different form on a different site. An unscoped list would
+    // silently demote whatever happened to share an ID elsewhere.
+    var NON_LEAD_FORMS =
+        NON_LEAD_FORMS_BY_HOST[window.location.hostname.replace(/^www\./, "")] ||
+        {};
 
     /** Extensions treated as a download rather than a page. */
     var DOWNLOAD_RE = /\.(pdf|zip|epub|mobi|csv|xlsx?|docx?|pptx?|mp3|mp4|wav)(\?|#|$)/i;
@@ -208,8 +238,10 @@
      */
     (function trackPurchase() {
         try {
-            if (window.location.pathname.indexOf("/receipt") !== 0) return;
-
+            // Keyed on the order parameter rather than the receipt path: the
+            // confirmation page is a normal WordPress page whose slug differs
+            // per site, so matching "/receipt" would work on one site and
+            // silently record nothing on the next.
             var params = new URLSearchParams(window.location.search);
             var orderHash =
                 params.get("order_hash") || params.get("trx_hash");
@@ -218,6 +250,10 @@
             if (!firstTimeOnly(orderHash)) return;
 
             send("conversion", "purchase", { label: orderHash });
+            // Marking happens inside firstTimeOnly, before the send. That is
+            // safe only because send() now always reaches the buffer above --
+            // if it could no-op, an order would be marked recorded and never
+            // actually sent.
         } catch (error) {
             /* never break the receipt page */
         }
