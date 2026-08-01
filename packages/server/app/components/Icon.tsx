@@ -1,4 +1,57 @@
-import { ICON_PATHS, type IconName } from "./icon-paths";
+import {
+    AppWindow,
+    Bot,
+    CalendarDays,
+    CircleCheck,
+    ExternalLink,
+    Eye,
+    FileText,
+    Gauge,
+    Globe,
+    House,
+    Link as LinkIcon,
+    Mail,
+    Megaphone,
+    Radio,
+    Search,
+    Settings,
+    Share2,
+    Target,
+    TriangleAlert,
+    Users,
+    Zap,
+    type LucideIcon,
+} from "lucide-react";
+
+/**
+ * Open-source icon set. The public names stay stable because preset records
+ * persist them in D1, while the rendered glyphs come from Lucide (ISC).
+ */
+const ICONS = {
+    bolt: Zap,
+    "signal-stream": Radio,
+    users: Users,
+    eye: Eye,
+    "file-lines": FileText,
+    link: LinkIcon,
+    globe: Globe,
+    browser: AppWindow,
+    "bullseye-arrow": Target,
+    "gauge-high": Gauge,
+    gear: Settings,
+    "magnifying-glass": Search,
+    robot: Bot,
+    "share-nodes": Share2,
+    envelope: Mail,
+    "rectangle-ad": Megaphone,
+    "arrow-up-right-from-square": ExternalLink,
+    "circle-check": CircleCheck,
+    "triangle-exclamation": TriangleAlert,
+    house: House,
+    calendar: CalendarDays,
+} satisfies Record<string, LucideIcon>;
+
+export type IconName = keyof typeof ICONS;
 
 export interface IconProps {
     name: IconName;
@@ -13,31 +66,21 @@ export interface IconProps {
     title?: string;
 }
 
-export default function Icon({
-    name,
-    size = 16,
-    className,
-    title,
-}: IconProps) {
-    const icon = ICON_PATHS[name];
-    if (!icon) return null;
+export default function Icon({ name, size = 16, className, title }: IconProps) {
+    const LucideGlyph = ICONS[name];
+    if (!LucideGlyph) return null;
 
     return (
-        <svg
+        <LucideGlyph
             className={className ? `icon ${className}` : "icon"}
             width={size}
             height={size}
-            viewBox={icon.viewBox}
-            fill="currentColor"
+            strokeWidth={1.75}
             role={title ? "img" : undefined}
             aria-hidden={title ? undefined : true}
             aria-label={title}
             focusable="false"
-        >
-            {icon.d.map((d, i) => (
-                <path key={i} d={d} />
-            ))}
-        </svg>
+        />
     );
 }
 

@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Form, NavLink, useLocation } from "react-router";
 
 import Icon from "./Icon";
-import type { IconName } from "./icon-paths";
+import type { IconName } from "./Icon";
 import {
     isPresetActive,
     presetHref,

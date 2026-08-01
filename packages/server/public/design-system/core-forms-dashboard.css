@@ -322,8 +322,7 @@
 }
 
 /* --------------------------------------------------------------------------
-   Icons. Font Awesome Pro paths inlined as SVG; they inherit colour from the
-   parent, so they never need their own.
+   Icons. Lucide React SVGs inherit colour from their parent.
    -------------------------------------------------------------------------- */
 
 .icon {
