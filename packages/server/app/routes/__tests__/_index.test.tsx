@@ -49,7 +49,7 @@ describe("Index route", () => {
         });
 
         expect(
-            screen.getByText("Enter the dashboard password to continue."),
+            screen.getByText("Enter your username and password, or use a passkey."),
         ).toBeInTheDocument();
 
         expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
