@@ -104,7 +104,7 @@ final class API_Client {
 		$query           = array(
 			'interval' => $this->normalize_interval( $interval ),
 			'timezone' => $this->get_timezone(),
-			'limit'    => 100,
+			'limit'    => 20,
 		);
 		foreach ( $allowed_filters as $key ) {
 			if ( isset( $filters[ $key ] ) && '' !== $filters[ $key ] ) {

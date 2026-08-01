@@ -367,25 +367,13 @@ describe("AnalyticsEngineAPI", () => {
 
     describe("getAllCountsByColumn", () => {
         test("it should return an array of [column, count] tuples", async () => {
-            // return 2 mocked responses
-            fetch.mockResolvedValueOnce(
+            fetch.mockResolvedValue(
                 createFetchResponse({
                     data: [
                         {
-                            blob4: "CA",
-                            isVisitor: 1,
-                            count: 3,
-                        },
-                    ],
-                }),
-            );
-            fetch.mockResolvedValueOnce(
-                createFetchResponse({
-                    data: [
-                        {
-                            blob4: "CA",
-                            isVisitor: 0,
-                            count: 1,
+                            value: "CA",
+                            visitors: 3,
+                            views: 4,
                         },
                     ],
                 }),
@@ -401,7 +389,7 @@ describe("AnalyticsEngineAPI", () => {
                 },
             );
 
-            expect(fetch).toHaveBeenCalledTimes(2);
+            expect(fetch).toHaveBeenCalledTimes(1);
             expect(
                 (fetch as Mock).mock.calls[0][1].body
                     .replace(/\s+/g, " ") // removes tabs and whitespace from query
@@ -418,17 +406,7 @@ describe("AnalyticsEngineAPI", () => {
         });
 
         test("should handle case where there are no results", async () => {
-            fetch
-                .mockResolvedValueOnce(
-                    createFetchResponse({
-                        data: [], // no visitor count results
-                    }),
-                )
-                .mockResolvedValueOnce(
-                    createFetchResponse({
-                        data: [], // no non-visitor results
-                    }),
-                );
+            fetch.mockResolvedValue(createFetchResponse({ data: [] }));
 
             const result = await api.getAllCountsByColumn(
                 "example.com",
@@ -438,7 +416,24 @@ describe("AnalyticsEngineAPI", () => {
             );
 
             expect(result).toEqual({});
-            expect(fetch).toHaveBeenCalledTimes(2);
+            expect(fetch).toHaveBeenCalledTimes(1);
+        });
+
+        test("quotes apostrophes in filters", async () => {
+            fetch.mockResolvedValue(createFetchResponse({ data: [] }));
+
+            await api.getAllCountsByColumn(
+                "example.com",
+                "path",
+                "7d",
+                "UTC",
+                { referrer: "https://example.com/reader's-picks" },
+            );
+
+            const sql = String((fetch as Mock).mock.calls[0][1].body);
+            expect(sql).toContain(
+                "blob5 = 'https://example.com/reader''s-picks'",
+            );
         });
     });
 

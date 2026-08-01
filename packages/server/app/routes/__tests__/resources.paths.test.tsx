@@ -29,28 +29,14 @@ describe("Resources/Paths route", () => {
     });
     describe("loader", () => {
         test("returns valid json", async () => {
-            // first request for visitors
-            fetch.mockResolvedValueOnce(
+            fetch.mockResolvedValue(
                 createFetchResponse({
                     data: [
-                        { blob3: "/", isVisitor: 1, count: "2" },
+                        { value: "/", visitors: "2", views: "7" },
                         {
-                            blob3: "/example",
-                            isVisitor: 1,
-                            count: "4",
-                        },
-                    ],
-                }),
-            );
-            // second request for views
-            fetch.mockResolvedValueOnce(
-                createFetchResponse({
-                    data: [
-                        { blob3: "/", isVisitor: 0, count: "5" },
-                        {
-                            blob3: "/example",
-                            isVisitor: 0,
-                            count: "6",
+                            value: "/example",
+                            visitors: "4",
+                            views: "10",
                         },
                     ],
                 }),
@@ -64,8 +50,7 @@ describe("Resources/Paths route", () => {
                 },
             });
 
-            // expect redirect
-            expect(fetch).toHaveBeenCalledTimes(2);
+            expect(fetch).toHaveBeenCalledTimes(1);
 
             const json = await response;
 

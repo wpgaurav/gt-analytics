@@ -175,10 +175,15 @@ function filtersToSql(filters: SearchFilters) {
     let filterStr = "";
     supportedFilters.forEach((filter) => {
         if (Object.hasOwnProperty.call(filters, filter)) {
-            filterStr += `AND ${ColumnMappings[filter]} = '${filters[filter]}'`;
+            filterStr += `AND ${ColumnMappings[filter]} = ${sqlStringLiteral(String(filters[filter]))}`;
         }
     });
     return filterStr;
+}
+
+/** Cloudflare Analytics Engine has no parameters, so quote string values. */
+function sqlStringLiteral(value: string): string {
+    return `'${value.replaceAll("'", "''")}'`;
 }
 
 /**
@@ -608,104 +613,49 @@ export class AnalyticsEngineAPI {
             interval,
             tz,
         );
-
-        // first query by visitor count – this is to figure out the top N results
-        // by visitor count first
-        // NOTE: there's an await here; need to fix this or harms parallelism
-        const visitorCountByColumn = await this.getVisitorCountByColumn(
-            siteId,
-            column,
-            interval,
-            tz,
-            filters,
-            page,
-            limit,
-        );
-
-        // next, make a second query - this time for non-visitor hits - by filtering
-        // on the keys returned by the first query.
-        const keys = visitorCountByColumn.map(([key]) => key);
-
-        let filterStr = filtersToSql(filters);
+        const filterStr = filtersToSql(filters);
         const _column = ColumnMappings[column];
 
-        if (keys.length > 0) {
-            filterStr += ` AND ${_column} IN (${keys.map((key) => `'${key}'`).join(", ")})`;
-        }
-
         const query = `
-            SELECT ${_column},
-                ${ColumnMappings.newVisitor} as isVisitor,
-                SUM(_sample_interval) as count
+            SELECT ${_column} AS value,
+                SUM(_sample_interval) AS views,
+                SUM(_sample_interval * ${ColumnMappings.newVisitor}) AS visitors
             FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql} AND timestamp < ${endIntervalSql}
-                AND ${ColumnMappings.newVisitor} = 0
                 AND ${ColumnMappings.siteId} = '${siteId}'
                 ${filterStr}
-            GROUP BY ${_column}, ${ColumnMappings.newVisitor}
-            ORDER BY count DESC
+            GROUP BY value
+            ORDER BY visitors DESC
             LIMIT ${limit * page}`;
 
         type SelectionSet = {
-            count: number;
-            isVisitor: number;
-            isBounce: number;
-        } & Record<
-            (typeof ColumnMappings)[T],
-            ColumnMappingToType<(typeof ColumnMappings)[T]>
-        >;
+            value: string | number;
+            views: string | number;
+            visitors: string | number;
+        };
 
-        const queryResult = this.query(query);
-        const returnPromise = new Promise<Record<string, AnalyticsCountResult>>(
-            (resolve, reject) =>
-                (async () => {
-                    const response = await queryResult;
+        const response = await this.query(query);
+        if (!response.ok) {
+            throw new Error(`${response.status} ${response.statusText}`);
+        }
 
-                    if (!response.ok) {
-                        reject(response.statusText);
-                    }
-
-                    const responseData =
-                        (await response.json()) as AnalyticsQueryResult<SelectionSet>;
-
-                    // since CF AE doesn't support OFFSET clauses, we select up to LIMIT and
-                    // then slice that into the individual requested page
-                    const pageData = responseData.data.slice(
-                        limit * (page - 1),
-                        limit * page,
-                    );
-
-                    // remap visitor counts into SelectionSet objects, then insert into
-                    // the query results (pageData)
-                    visitorCountByColumn.forEach(([key, value]) => {
-                        pageData.push({
-                            [_column]: key,
-                            count: value,
-                            isVisitor: 1,
-                        } as SelectionSet);
-                    });
-
-                    const result = pageData.reduce(
-                        (acc, row) => {
-                            const key = row[_column] as string;
-                            if (!Object.hasOwn(acc, key)) {
-                                acc[key] = {
-                                    views: 0,
-                                    visitors: 0,
-                                    bounces: 0,
-                                } as AnalyticsCountResult;
-                            }
-
-                            accumulateCountsFromRowResult(acc[key], row);
-                            return acc;
-                        },
-                        {} as Record<string, AnalyticsCountResult>,
-                    );
-
-                    resolve(result);
-                })(),
+        const responseData =
+            (await response.json()) as AnalyticsQueryResult<SelectionSet>;
+        const pageData = responseData.data.slice(
+            limit * (page - 1),
+            limit * page,
         );
-        return returnPromise;
+
+        return Object.fromEntries(
+            pageData.map((row) => [
+                String(row.value ?? ""),
+                {
+                    views: Number(row.views) || 0,
+                    visitors: Number(row.visitors) || 0,
+                    bounces: 0,
+                },
+            ]),
+        );
     }
 
     async getCountByPath(

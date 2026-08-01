@@ -6,8 +6,6 @@ import { requireApiAuth } from "~/lib/api-auth";
 import { apiJson, readApiQuery } from "~/lib/api-input";
 
 const DIMENSIONS = [
-    "path",
-    "referrer",
     "referrerHost",
     "channel",
     "country",
@@ -32,6 +30,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         request,
         principal.siteId,
     );
+    // A combined report fans out across every dashboard section. Keep each
+    // section bounded so one large `limit` cannot exhaust the Worker's CPU or
+    // memory; dedicated dashboard tables display no more than 20 rows.
+    const reportLimit = Math.min(limit, 20);
     const env = context.cloudflare.env;
     const eventsApi = new EventsAPI(
         env.CF_ACCOUNT_ID,
@@ -39,41 +41,60 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         env.CF_EVENTS_DATASET || DEFAULT_EVENTS_DATASET,
     );
 
-    const [counts, series, pages, referrers, events, eventDetails, durations] =
+    const [counts, series] = await Promise.all([
+        context.history.getCounts(site, interval, timezone, filters),
+        context.history.getSeries(site, interval, timezone, filters),
+    ]);
+    const [pages, referrers, events, eventDetails, durations] =
         await Promise.all([
-            context.history.getCounts(site, interval, timezone, filters),
-            context.history.getSeries(site, interval, timezone, filters),
             context.analyticsEngine.getPageMetrics(
                 site,
                 interval,
                 timezone,
                 filters,
-                limit,
-            ),
+                reportLimit,
+            ).catch((error: unknown) => optionalFailure("pages", error, [])),
             context.analyticsEngine.getReferrersGrouped(
                 site,
                 interval,
                 timezone,
                 filters,
-                limit * 2,
+                reportLimit * 2,
+            ).catch((error: unknown) =>
+                optionalFailure("referrers", error, []),
             ),
             eventsApi.getEventCounts(
                 site,
                 interval,
                 timezone,
                 undefined,
-                limit,
+                reportLimit,
                 filters,
+            ).catch((error: unknown) =>
+                optionalFailure("events", error, []),
             ),
             eventsApi.getEventBreakdown(
                 site,
                 interval,
                 timezone,
                 undefined,
-                limit * 25,
+                reportLimit * 25,
                 filters,
+            ).catch((error: unknown) =>
+                optionalFailure("event details", error, []),
             ),
-            eventsApi.getDurationByPath(site, interval, timezone, limit),
+            eventsApi
+                .getDurationByPath(site, interval, timezone, reportLimit)
+                .catch((error: unknown) =>
+                    optionalFailure(
+                        "durations",
+                        error,
+                        new Map<
+                            string,
+                            { avgSeconds: number; samples: number }
+                        >(),
+                    ),
+                ),
         ]);
     const dimensionRows = await Promise.all(
         DIMENSIONS.map((dimension) =>
@@ -84,7 +105,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
                 timezone,
                 filters,
                 1,
-                limit,
+                reportLimit,
+            ).catch((error: unknown) =>
+                optionalFailure(`dimension ${dimension}`, error, []),
             ),
         ),
     );
@@ -127,6 +150,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
             interval,
             timezone,
             generatedAt: new Date().toISOString(),
+            resultLimit: reportLimit,
             source: counts.source,
             truncated: counts.truncated || series.truncated,
             summary: {
@@ -152,4 +176,9 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
             dimensions,
         },
     });
+}
+
+function optionalFailure<T>(section: string, error: unknown, fallback: T): T {
+    console.error(`API analytics ${section} query failed`, error);
+    return fallback;
 }
