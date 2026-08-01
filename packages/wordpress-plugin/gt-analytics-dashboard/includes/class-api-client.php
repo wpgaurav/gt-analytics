@@ -159,7 +159,7 @@ final class API_Client {
 
 		$url = add_query_arg( $query, $base_url . '/api/v1/' . ltrim( $endpoint, '/' ) );
 		$args = array(
-			'timeout'             => 8,
+			'timeout'             => 20,
 			'redirection'         => 2,
 			'limit_response_size' => 1024 * 1024,
 			'headers'             => array(

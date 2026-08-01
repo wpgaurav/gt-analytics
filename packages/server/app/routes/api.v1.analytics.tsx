@@ -34,6 +34,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     // section bounded so one large `limit` cannot exhaust the Worker's CPU or
     // memory; dedicated dashboard tables display no more than 20 rows.
     const reportLimit = Math.min(limit, 20);
+    const dimensionLimit = Math.min(reportLimit, 10);
     const env = context.cloudflare.env;
     const eventsApi = new EventsAPI(
         env.CF_ACCOUNT_ID,
@@ -78,7 +79,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
                 interval,
                 timezone,
                 undefined,
-                reportLimit * 25,
+                reportLimit * 10,
                 filters,
             ).catch((error: unknown) =>
                 optionalFailure("event details", error, []),
@@ -96,34 +97,47 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
                     ),
                 ),
         ]);
-    const dimensionRows = await Promise.all(
-        DIMENSIONS.map((dimension) =>
-            context.history.getAllCountsByColumn(
-                site,
-                dimension,
-                interval,
-                timezone,
-                filters,
-                1,
-                reportLimit,
-            ).catch((error: unknown) =>
-                optionalFailure(`dimension ${dimension}`, error, []),
+    const dimensions: Record<
+        string,
+        { value: string; visitors: number; views: number }[]
+    > = {};
+    // Analytics Engine responses are individually small, but retaining all
+    // dimension fetches at once can breach the Worker's memory ceiling. Four
+    // at a time keeps peak memory bounded without making WordPress wait on 12
+    // serial network round trips.
+    for (let offset = 0; offset < DIMENSIONS.length; offset += 4) {
+        const batch = DIMENSIONS.slice(offset, offset + 4);
+        const results = await Promise.all(
+            batch.map((dimension) =>
+                context.history
+                    .getAllCountsByColumn(
+                        site,
+                        dimension,
+                        interval,
+                        timezone,
+                        filters,
+                        1,
+                        dimensionLimit,
+                    )
+                    .catch((error: unknown) =>
+                        optionalFailure(
+                            `dimension ${dimension}`,
+                            error,
+                            [],
+                        ),
+                    ),
             ),
-        ),
-    );
-
-    const dimensions = Object.fromEntries(
-        DIMENSIONS.map((dimension, index) => [
-            dimension,
-            dimensionRows[index].map(
+        );
+        batch.forEach((dimension, index) => {
+            dimensions[dimension] = results[index].map(
                 ([value, visitors, views]: [string, number, number]) => ({
                     value,
                     visitors,
                     views,
                 }),
-            ),
-        ]),
-    );
+            );
+        });
+    }
     const pageData = pages.map(
         (page: {
             path: string;
