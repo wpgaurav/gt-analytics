@@ -34,10 +34,7 @@ import { StatsCard } from "./resources.stats";
 import { ConversionsCard } from "./resources.conversions";
 import { requireAuth } from "~/lib/auth";
 import { listSiteUrls, listSites } from "~/sites/sites";
-import {
-    choosePreferredSite,
-    SITE_COOKIE_NAME,
-} from "~/lib/site-preference";
+import { choosePreferredSite, SITE_COOKIE_NAME } from "~/lib/site-preference";
 
 export const meta: MetaFunction = () => {
     return [
@@ -130,7 +127,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     // turned back into a clickable link on the live site.
     let siteUrls: Record<string, string> = {};
     try {
-        siteUrls = await listSiteUrls(context.cloudflare.env.SITES_DB, user.accountId!);
+        siteUrls = await listSiteUrls(
+            context.cloudflare.env.SITES_DB,
+            user.accountId!,
+        );
     } catch (err) {
         // A missing or unreachable sites database must not take the dashboard
         // down -- links simply degrade to plain text.
@@ -236,16 +236,16 @@ export default function Dashboard() {
                     onChange={(e) => changeSite(e.target.value)}
                 >
                     {data.sites.map((siteId: string) => (
-                        <option key={`k-${siteId}`} value={siteId || "@unknown"}>
+                        <option
+                            key={`k-${siteId}`}
+                            value={siteId || "@unknown"}
+                        >
                             {siteId || "(unknown)"}
                         </option>
                     ))}
                 </select>
 
-                <RangePicker
-                    value={data.interval}
-                    onChange={changeInterval}
-                />
+                <RangePicker value={data.interval} onChange={changeInterval} />
 
                 <SearchFilterBadges
                     filters={data.filters}
@@ -275,7 +275,7 @@ export default function Dashboard() {
 
                 <div className="grid-cards grid-cards--2">
                     <ChannelCard {...cardProps} />
-                    <ConversionsCard {...cardProps} />
+                    <ConversionsCard {...cardProps} baseUrl={siteBase} />
                 </div>
 
                 <div className="grid-cards grid-cards--3">

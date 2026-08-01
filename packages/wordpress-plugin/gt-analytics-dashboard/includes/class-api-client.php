@@ -72,7 +72,7 @@ final class API_Client {
 	 * @return string
 	 */
 	public function get_dashboard_url( $site_id = '' ) {
-		$query = array( 'interval' => '7d' );
+		$query = array( 'interval' => '30d' );
 		if ( '' !== $site_id ) {
 			$query['site'] = $site_id;
 		}
@@ -93,19 +93,40 @@ final class API_Client {
 	}
 
 	/**
-	 * Gets the seven-day report.
+	 * Gets a complete read-only report for the requested range and filters.
 	 *
+	 * @param string               $interval Report interval.
+	 * @param array<string, string> $filters  Optional dashboard filters.
 	 * @return array<string, mixed>|\WP_Error
 	 */
-	public function get_seven_day_analytics() {
+	public function get_analytics( $interval = '30d', array $filters = array() ) {
+		$allowed_filters = array( 'path', 'referrer', 'deviceModel', 'deviceType', 'country', 'browserName', 'browserVersion', 'utmSource', 'utmMedium', 'utmCampaign', 'utmTerm', 'utmContent', 'channel', 'referrerHost' );
+		$query           = array(
+			'interval' => $this->normalize_interval( $interval ),
+			'timezone' => $this->get_timezone(),
+			'limit'    => 100,
+		);
+		foreach ( $allowed_filters as $key ) {
+			if ( isset( $filters[ $key ] ) && '' !== $filters[ $key ] ) {
+				$query[ $key ] = substr( (string) $filters[ $key ], 0, 500 );
+			}
+		}
 		return $this->request(
 			'analytics',
-			array(
-				'interval' => '7d',
-				'timezone' => $this->get_timezone(),
-				'limit'    => 10,
-			)
+			$query
 		);
+	}
+
+	/** @return string */
+	private function normalize_interval( $interval ) {
+		$value = (string) $interval;
+		if ( in_array( $value, array( 'today', 'yesterday', '1d', '7d', '30d', '90d', '180d', '365d' ), true ) ) {
+			return $value;
+		}
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/', $value ) ) {
+			return $value;
+		}
+		return '30d';
 	}
 
 	/**

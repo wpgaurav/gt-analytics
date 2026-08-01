@@ -36,16 +36,25 @@ final class Data_Service {
 	/**
 	 * Returns both report windows while allowing partial failures.
 	 *
-	 * @param bool $force_realtime Skip the short real-time cache.
+	 * @param bool                  $force_realtime Skip the short real-time cache.
+	 * @param string                $interval       Historical report interval.
+	 * @param array<string, string> $filters        Historical report filters.
 	 * @return array<string, mixed>|\WP_Error
 	 */
-	public function get_snapshot( $force_realtime = false ) {
+	public function get_snapshot( $force_realtime = false, $interval = '30d', array $filters = array() ) {
 		if ( ! $this->client->is_configured() ) {
 			return new \WP_Error( 'gtad_not_configured', __( 'Connect a site-scoped GT Analytics API key to display analytics.', 'gt-analytics-dashboard' ) );
 		}
 
 		$sites     = $this->get_sites();
-		$analytics = $this->remember( 'analytics', self::ANALYTICS_TTL, array( $this->client, 'get_seven_day_analytics' ) );
+		$cache_key = 'analytics_' . substr( hash( 'sha256', $interval . '|' . json_encode( $filters ) ), 0, 16 );
+		$analytics = $this->remember(
+			$cache_key,
+			self::ANALYTICS_TTL,
+			function () use ( $interval, $filters ) {
+				return $this->client->get_analytics( $interval, $filters );
+			}
+		);
 		$realtime  = $this->remember( 'realtime', self::REALTIME_TTL, array( $this->client, 'get_realtime' ), $force_realtime );
 		$site      = ! is_wp_error( $sites ) && isset( $sites[0] ) && is_array( $sites[0] ) ? $sites[0] : array();
 
@@ -62,6 +71,8 @@ final class Data_Service {
 					)
 				)
 			),
+			'interval'  => $interval,
+			'filters'   => $filters,
 		);
 	}
 

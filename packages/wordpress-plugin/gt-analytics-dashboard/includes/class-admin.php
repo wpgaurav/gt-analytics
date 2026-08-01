@@ -261,14 +261,16 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 		if ( ! current_user_can( $this->capability() ) ) {
 			wp_die( esc_html__( 'You are not allowed to view GT Analytics.', 'gt-analytics-dashboard' ) );
 		}
+		$interval = $this->request_interval();
+		$filters  = $this->request_filters();
 		?>
 		<div class="wrap gtad-admin-page">
 			<div class="gtad-admin-page__head">
-				<div><h1><?php esc_html_e( 'GT Analytics', 'gt-analytics-dashboard' ); ?></h1><p><?php esc_html_e( 'Real-time activity and the complete seven-day report for this WordPress site.', 'gt-analytics-dashboard' ); ?></p></div>
+				<div><h1><?php esc_html_e( 'GT Analytics', 'gt-analytics-dashboard' ); ?></h1><p><?php esc_html_e( 'Complete read-only analytics for this WordPress site, including real-time activity.', 'gt-analytics-dashboard' ); ?></p></div>
 				<a class="button" href="<?php echo esc_url( admin_url( 'admin.php?page=' . self::SETTINGS_PAGE ) ); ?>"><?php esc_html_e( 'Settings', 'gt-analytics-dashboard' ); ?></a>
 			</div>
 			<div id="gt_analytics_dashboard_page" data-gtad-root data-gtad-view="dashboard">
-				<?php echo $this->render_dashboard_inner( $this->service->get_snapshot() ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Renderer escapes all dynamic values. ?>
+				<?php echo $this->render_dashboard_inner( $this->service->get_snapshot( false, $interval, $filters ) ); // phpcs:ignore WordPress.Security.EscapeOutput.OutputNotEscaped -- Renderer escapes all dynamic values. ?>
 			</div>
 		</div>
 		<?php
@@ -358,12 +360,14 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 			wp_send_json_error( array( 'message' => __( 'You are not allowed to view these analytics.', 'gt-analytics-dashboard' ) ), 403 );
 		}
 
-		$view = isset( $_POST['view'] ) ? sanitize_key( wp_unslash( $_POST['view'] ) ) : 'widget';
+		$view     = isset( $_POST['view'] ) ? sanitize_key( wp_unslash( $_POST['view'] ) ) : 'widget';
+		$interval = isset( $_POST['interval'] ) ? $this->sanitize_interval( wp_unslash( $_POST['interval'] ) ) : '30d';
+		$filters  = $this->request_filters( $_POST );
 		wp_send_json_success(
 			array(
 				'html' => 'dashboard' === $view
-					? $this->render_dashboard_inner( $this->service->get_snapshot( true ) )
-					: $this->render_widget_inner( $this->service->get_snapshot( true ) ),
+					? $this->render_dashboard_inner( $this->service->get_snapshot( true, $interval, $filters ) )
+					: $this->render_widget_inner( $this->service->get_snapshot( true, $interval, $filters ) ),
 			)
 		);
 	}
@@ -388,11 +392,13 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 		$site      = isset( $snapshot['site'] ) && is_array( $snapshot['site'] ) ? $snapshot['site'] : array();
 		$site_id   = isset( $site['id'] ) ? (string) $site['id'] : ( isset( $analytics['site'] ) ? (string) $analytics['site'] : '' );
 		$site_name = isset( $site['label'] ) && '' !== $site['label'] ? (string) $site['label'] : $site_id;
+		$base_url  = isset( $site['baseUrl'] ) ? (string) $site['baseUrl'] : '';
+		$interval  = isset( $snapshot['interval'] ) ? (string) $snapshot['interval'] : '30d';
 		?>
 		<div class="gtad-widget">
 			<div class="gtad-widget__bar">
-				<div><strong><?php echo esc_html( $site_name ); ?></strong><span><?php esc_html_e( 'Realtime + last 7 days', 'gt-analytics-dashboard' ); ?></span></div>
-				<button type="button" class="button-link gtad-refresh" data-gtad-refresh aria-label="<?php esc_attr_e( 'Refresh analytics', 'gt-analytics-dashboard' ); ?>"><span class="dashicons dashicons-update" aria-hidden="true"></span></button>
+				<div><strong><?php echo esc_html( $site_name ); ?></strong><span><?php echo esc_html( sprintf( __( 'Realtime + %s', 'gt-analytics-dashboard' ), $this->interval_label( $interval ) ) ); ?></span></div>
+				<div class="gtad-widget__actions"><select data-gtad-interval aria-label="<?php esc_attr_e( 'Report range', 'gt-analytics-dashboard' ); ?>"><option value="1d" <?php selected( $interval, '1d' ); ?>>1d</option><option value="7d" <?php selected( $interval, '7d' ); ?>>7d</option><option value="30d" <?php selected( $interval, '30d' ); ?>>30d</option><option value="90d" <?php selected( $interval, '90d' ); ?>>90d</option></select><button type="button" class="button-link gtad-refresh" data-gtad-refresh aria-label="<?php esc_attr_e( 'Refresh analytics', 'gt-analytics-dashboard' ); ?>"><span class="dashicons dashicons-update" aria-hidden="true"></span></button></div>
 			</div>
 
 			<?php if ( ! empty( $errors ) ) : ?>
@@ -402,14 +408,14 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 			<div class="gtad-kpis">
 				<?php $this->render_metric( __( 'Active now', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'activeVisitors' ), 'is-live' ); ?>
 				<?php $this->render_metric( __( 'Views · 1 min', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'viewsLastMinute' ) ); ?>
-				<?php $this->render_metric( __( 'Visitors · 7 days', 'gt-analytics-dashboard' ), $this->integer_value( $summary, 'visitors' ) ); ?>
-				<?php $this->render_metric( __( 'Views · 7 days', 'gt-analytics-dashboard' ), $this->integer_value( $summary, 'views' ) ); ?>
+				<?php $this->render_metric( __( 'Visitors', 'gt-analytics-dashboard' ), $this->integer_value( $summary, 'visitors' ) ); ?>
+				<?php $this->render_metric( __( 'Views', 'gt-analytics-dashboard' ), $this->integer_value( $summary, 'views' ) ); ?>
 				<?php $this->render_metric( __( 'Bounce rate', 'gt-analytics-dashboard' ), $this->format_percentage( isset( $summary['bounceRate'] ) ? $summary['bounceRate'] : null ) ); ?>
 				<?php $this->render_metric( __( 'Avg. time', 'gt-analytics-dashboard' ), $this->format_duration( isset( $summary['avgDurationSeconds'] ) ? $summary['avgDurationSeconds'] : null ) ); ?>
 			</div>
 
 			<?php $this->render_series( isset( $analytics['series'] ) && is_array( $analytics['series'] ) ? $analytics['series'] : array() ); ?>
-			<?php $this->render_top_paths( isset( $realtime['topPaths'] ) && is_array( $realtime['topPaths'] ) ? $realtime['topPaths'] : array() ); ?>
+			<?php $this->render_top_paths( isset( $realtime['topPaths'] ) && is_array( $realtime['topPaths'] ) ? $realtime['topPaths'] : array(), $base_url ); ?>
 
 			<div class="gtad-widget__footer">
 				<span aria-live="polite"><?php echo esc_html( $this->generated_label( $analytics, $realtime ) ); ?></span>
@@ -440,20 +446,26 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 		$site      = isset( $snapshot['site'] ) && is_array( $snapshot['site'] ) ? $snapshot['site'] : array();
 		$site_id   = isset( $site['id'] ) ? (string) $site['id'] : ( isset( $analytics['site'] ) ? (string) $analytics['site'] : '' );
 		$site_name = isset( $site['label'] ) && '' !== $site['label'] ? (string) $site['label'] : $site_id;
+		$base_url  = isset( $site['baseUrl'] ) ? (string) $site['baseUrl'] : '';
+		$interval  = isset( $snapshot['interval'] ) ? (string) $snapshot['interval'] : '30d';
+		$filters   = isset( $snapshot['filters'] ) && is_array( $snapshot['filters'] ) ? $snapshot['filters'] : array();
+		$range     = $this->interval_label( $interval );
 		?>
 		<div class="gtad-dashboard">
 			<div class="gtad-dashboard__bar">
-				<div><strong><?php echo esc_html( $site_name ); ?></strong><span><?php echo esc_html( $site_id ); ?> · <?php esc_html_e( 'Last 7 days', 'gt-analytics-dashboard' ); ?></span></div>
+				<div><strong><?php echo esc_html( $site_name ); ?></strong><span><?php echo esc_html( $site_id ); ?> · <?php echo esc_html( $range ); ?></span></div>
 				<div class="gtad-dashboard__actions"><button type="button" class="button gtad-refresh" data-gtad-refresh><span class="dashicons dashicons-update" aria-hidden="true"></span> <?php esc_html_e( 'Refresh', 'gt-analytics-dashboard' ); ?></button><a class="button button-primary" href="<?php echo esc_url( $this->client->get_dashboard_url( $site_id ) ); ?>" target="_blank" rel="noopener noreferrer"><?php esc_html_e( 'Open website analytics', 'gt-analytics-dashboard' ); ?></a></div>
 			</div>
+
+			<?php $this->render_report_controls( $interval, $filters ); ?>
 
 			<?php if ( ! empty( $errors ) ) : ?><div class="gtad-inline-error" role="status"><?php echo esc_html( implode( ' ', array_map( 'strval', $errors ) ) ); ?></div><?php endif; ?>
 
 			<div class="gtad-kpis gtad-kpis--page">
 				<?php $this->render_metric( __( 'Active now', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'activeVisitors' ), 'is-live' ); ?>
 				<?php $this->render_metric( __( 'Views · 1 min', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'viewsLastMinute' ) ); ?>
-				<?php $this->render_metric( __( 'Visitors · 7 days', 'gt-analytics-dashboard' ), $this->integer_value( $summary, 'visitors' ) ); ?>
-				<?php $this->render_metric( __( 'Views · 7 days', 'gt-analytics-dashboard' ), $this->integer_value( $summary, 'views' ) ); ?>
+				<?php $this->render_metric( sprintf( __( 'Visitors · %s', 'gt-analytics-dashboard' ), $range ), $this->integer_value( $summary, 'visitors' ) ); ?>
+				<?php $this->render_metric( sprintf( __( 'Views · %s', 'gt-analytics-dashboard' ), $range ), $this->integer_value( $summary, 'views' ) ); ?>
 				<?php $this->render_metric( __( 'Bounce rate', 'gt-analytics-dashboard' ), $this->format_percentage( isset( $summary['bounceRate'] ) ? $summary['bounceRate'] : null ) ); ?>
 				<?php $this->render_metric( __( 'Avg. time', 'gt-analytics-dashboard' ), $this->format_duration( isset( $summary['avgDurationSeconds'] ) ? $summary['avgDurationSeconds'] : null ) ); ?>
 			</div>
@@ -461,17 +473,17 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 			<section class="gtad-panel gtad-panel--wide"><h2><?php esc_html_e( 'Traffic trend', 'gt-analytics-dashboard' ); ?></h2><?php $this->render_series( isset( $analytics['series'] ) && is_array( $analytics['series'] ) ? $analytics['series'] : array() ); ?></section>
 
 			<div class="gtad-dashboard-grid">
-				<?php $this->render_pages_table( isset( $analytics['pages'] ) && is_array( $analytics['pages'] ) ? $analytics['pages'] : array() ); ?>
-				<?php $this->render_tuple_card( __( 'Live pages', 'gt-analytics-dashboard' ), isset( $realtime['topPaths'] ) && is_array( $realtime['topPaths'] ) ? $realtime['topPaths'] : array() ); ?>
+				<?php $this->render_pages_table( isset( $analytics['pages'] ) && is_array( $analytics['pages'] ) ? $analytics['pages'] : array(), $base_url ); ?>
+				<?php $this->render_tuple_card( __( 'Live pages', 'gt-analytics-dashboard' ), isset( $realtime['topPaths'] ) && is_array( $realtime['topPaths'] ) ? $realtime['topPaths'] : array(), 'path', $base_url ); ?>
 				<?php $this->render_tuple_card( __( 'Live channels', 'gt-analytics-dashboard' ), isset( $realtime['topChannels'] ) && is_array( $realtime['topChannels'] ) ? $realtime['topChannels'] : array() ); ?>
-				<?php $this->render_tuple_card( __( 'Live referrers', 'gt-analytics-dashboard' ), isset( $realtime['topReferrers'] ) && is_array( $realtime['topReferrers'] ) ? $realtime['topReferrers'] : array() ); ?>
+				<?php $this->render_tuple_card( __( 'Live referrers', 'gt-analytics-dashboard' ), isset( $realtime['topReferrers'] ) && is_array( $realtime['topReferrers'] ) ? $realtime['topReferrers'] : array(), 'referrerHost' ); ?>
 				<?php $this->render_tuple_card( __( 'Live countries', 'gt-analytics-dashboard' ), isset( $realtime['topCountries'] ) && is_array( $realtime['topCountries'] ) ? $realtime['topCountries'] : array() ); ?>
-				<?php $this->render_referrers_table( isset( $analytics['referrers'] ) && is_array( $analytics['referrers'] ) ? $analytics['referrers'] : array() ); ?>
-				<?php $this->render_events_table( isset( $analytics['events'] ) && is_array( $analytics['events'] ) ? $analytics['events'] : array() ); ?>
+				<?php $this->render_referrers_table( isset( $analytics['referrers'] ) && is_array( $analytics['referrers'] ) ? $analytics['referrers'] : array(), $range ); ?>
+				<?php $this->render_events_table( isset( $analytics['events'] ) && is_array( $analytics['events'] ) ? $analytics['events'] : array(), isset( $analytics['eventDetails'] ) && is_array( $analytics['eventDetails'] ) ? $analytics['eventDetails'] : array(), $range, $base_url ); ?>
 			</div>
 
 			<?php $this->render_dimensions( isset( $analytics['dimensions'] ) && is_array( $analytics['dimensions'] ) ? $analytics['dimensions'] : array() ); ?>
-			<?php $this->render_live_feed( isset( $realtime['feed'] ) && is_array( $realtime['feed'] ) ? $realtime['feed'] : array(), isset( $realtime['now'] ) ? (int) $realtime['now'] : (int) round( microtime( true ) * 1000 ) ); ?>
+			<?php $this->render_live_feed( isset( $realtime['feed'] ) && is_array( $realtime['feed'] ) ? $realtime['feed'] : array(), isset( $realtime['now'] ) ? (int) $realtime['now'] : (int) round( microtime( true ) * 1000 ), $base_url ); ?>
 
 			<div class="gtad-dashboard__footer"><span aria-live="polite"><?php echo esc_html( $this->generated_label( $analytics, $realtime ) ); ?></span><span><?php esc_html_e( 'The API key is restricted to this site.', 'gt-analytics-dashboard' ); ?></span></div>
 		</div>
@@ -480,43 +492,56 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 	}
 
 	/** @return void */
-	private function render_pages_table( array $pages ) {
+	private function render_pages_table( array $pages, $base_url = '' ) {
 		?>
 		<section class="gtad-panel gtad-panel--wide"><h2><?php esc_html_e( 'Top pages', 'gt-analytics-dashboard' ); ?></h2><div class="gtad-table-wrap"><table class="widefat striped"><thead><tr><th><?php esc_html_e( 'Page', 'gt-analytics-dashboard' ); ?></th><th><?php esc_html_e( 'Visitors', 'gt-analytics-dashboard' ); ?></th><th><?php esc_html_e( 'Views', 'gt-analytics-dashboard' ); ?></th><th><?php esc_html_e( 'Bounce', 'gt-analytics-dashboard' ); ?></th><th><?php esc_html_e( 'Avg. time', 'gt-analytics-dashboard' ); ?></th></tr></thead><tbody>
 		<?php if ( empty( $pages ) ) : ?><tr><td colspan="5"><?php esc_html_e( 'No page data yet.', 'gt-analytics-dashboard' ); ?></td></tr><?php else : foreach ( array_slice( $pages, 0, 20 ) as $page ) : ?>
-			<tr><td class="gtad-truncate" title="<?php echo esc_attr( isset( $page['path'] ) ? (string) $page['path'] : '/' ); ?>"><?php echo esc_html( isset( $page['path'] ) ? (string) $page['path'] : '/' ); ?></td><td><?php echo esc_html( number_format_i18n( isset( $page['visitors'] ) ? (int) $page['visitors'] : 0 ) ); ?></td><td><?php echo esc_html( number_format_i18n( isset( $page['views'] ) ? (int) $page['views'] : 0 ) ); ?></td><td><?php echo esc_html( $this->format_percentage( isset( $page['bounceRate'] ) ? $page['bounceRate'] : null ) ); ?></td><td><?php echo esc_html( $this->format_duration( isset( $page['avgDurationSeconds'] ) ? $page['avgDurationSeconds'] : null ) ); ?></td></tr>
+			<?php $path = isset( $page['path'] ) ? (string) $page['path'] : '/'; $url = $this->page_url( $base_url, $path ); ?>
+			<tr><td class="gtad-truncate" title="<?php echo esc_attr( $path ); ?>"><?php if ( $url ) : ?><a href="<?php echo esc_url( $url ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $path ); ?></a><?php else : echo esc_html( $path ); endif; ?></td><td><?php echo esc_html( number_format_i18n( isset( $page['visitors'] ) ? (int) $page['visitors'] : 0 ) ); ?></td><td><?php echo esc_html( number_format_i18n( isset( $page['views'] ) ? (int) $page['views'] : 0 ) ); ?></td><td><?php echo esc_html( $this->format_percentage( isset( $page['bounceRate'] ) ? $page['bounceRate'] : null ) ); ?></td><td><?php echo esc_html( $this->format_duration( isset( $page['avgDurationSeconds'] ) ? $page['avgDurationSeconds'] : null ) ); ?></td></tr>
 		<?php endforeach; endif; ?></tbody></table></div></section>
 		<?php
 	}
 
 	/** @return void */
-	private function render_tuple_card( $title, array $rows ) {
+	private function render_tuple_card( $title, array $rows, $kind = '', $base_url = '' ) {
 		?>
 		<section class="gtad-panel"><h2><?php echo esc_html( $title ); ?></h2><ol class="gtad-ranked-list">
 		<?php if ( empty( $rows ) ) : ?><li><span><?php esc_html_e( 'No activity yet.', 'gt-analytics-dashboard' ); ?></span></li><?php else : foreach ( array_slice( $rows, 0, 10 ) as $row ) : ?>
-			<li><span class="gtad-truncate" title="<?php echo esc_attr( isset( $row[0] ) ? (string) $row[0] : '—' ); ?>"><?php echo esc_html( isset( $row[0] ) && '' !== $row[0] ? (string) $row[0] : '—' ); ?></span><strong><?php echo esc_html( number_format_i18n( isset( $row[1] ) ? (int) $row[1] : 0 ) ); ?></strong></li>
+			<?php $value = isset( $row[0] ) && '' !== $row[0] ? (string) $row[0] : '—'; $url = 'path' === $kind ? $this->page_url( $base_url, $value ) : ( 'referrerHost' === $kind && '—' !== $value ? 'https://' . $value : '' ); ?>
+			<li><span class="gtad-truncate" title="<?php echo esc_attr( $value ); ?>"><?php if ( $url ) : ?><a href="<?php echo esc_url( $url ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $value ); ?></a><?php else : echo esc_html( $value ); endif; ?></span><strong><?php echo esc_html( number_format_i18n( isset( $row[1] ) ? (int) $row[1] : 0 ) ); ?></strong></li>
 		<?php endforeach; endif; ?></ol></section>
 		<?php
 	}
 
 	/** @return void */
-	private function render_referrers_table( array $rows ) {
+	private function render_referrers_table( array $rows, $range = '' ) {
 		?>
-		<section class="gtad-panel"><h2><?php esc_html_e( 'Top referrers · 7 days', 'gt-analytics-dashboard' ); ?></h2><ol class="gtad-ranked-list">
+		<section class="gtad-panel"><h2><?php echo esc_html( sprintf( __( 'Top referrers · %s', 'gt-analytics-dashboard' ), $range ) ); ?></h2><ol class="gtad-ranked-list">
 		<?php if ( empty( $rows ) ) : ?><li><span><?php esc_html_e( 'No referrals yet.', 'gt-analytics-dashboard' ); ?></span></li><?php else : foreach ( array_slice( $rows, 0, 10 ) as $row ) : ?>
-			<li><span class="gtad-truncate"><?php echo esc_html( ! empty( $row['host'] ) ? (string) $row['host'] : __( 'Direct / unknown', 'gt-analytics-dashboard' ) ); ?></span><strong><?php echo esc_html( number_format_i18n( isset( $row['views'] ) ? (int) $row['views'] : 0 ) ); ?></strong></li>
+			<?php $host = ! empty( $row['host'] ) ? (string) $row['host'] : ''; $urls = isset( $row['urls'] ) && is_array( $row['urls'] ) ? $row['urls'] : array(); ?>
+			<li><?php if ( ! empty( $urls ) ) : ?><details class="gtad-referrer"><summary><span class="gtad-truncate"><?php echo esc_html( $host ? $host : __( 'Direct / unknown', 'gt-analytics-dashboard' ) ); ?></span><strong><?php echo esc_html( number_format_i18n( isset( $row['views'] ) ? (int) $row['views'] : 0 ) ); ?></strong></summary><ol><?php foreach ( array_slice( $urls, 0, 20 ) as $item ) : $ref_url = ! empty( $item['url'] ) ? (string) $item['url'] : ''; ?><li><a class="gtad-truncate" href="<?php echo esc_url( $ref_url ); ?>" target="_blank" rel="noopener noreferrer" title="<?php echo esc_attr( $ref_url ); ?>"><?php echo esc_html( $ref_url ); ?></a><strong><?php echo esc_html( number_format_i18n( isset( $item['views'] ) ? (int) $item['views'] : 0 ) ); ?></strong></li><?php endforeach; ?></ol></details><?php else : ?><span class="gtad-truncate"><?php if ( $host ) : ?><a href="<?php echo esc_url( 'https://' . $host ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $host ); ?></a><?php else : esc_html_e( 'Direct / unknown', 'gt-analytics-dashboard' ); endif; ?></span><strong><?php echo esc_html( number_format_i18n( isset( $row['views'] ) ? (int) $row['views'] : 0 ) ); ?></strong><?php endif; ?></li>
 		<?php endforeach; endif; ?></ol></section>
 		<?php
 	}
 
 	/** @return void */
-	private function render_events_table( array $rows ) {
-		?>
-		<section class="gtad-panel"><h2><?php esc_html_e( 'Events · 7 days', 'gt-analytics-dashboard' ); ?></h2><ol class="gtad-ranked-list">
-		<?php if ( empty( $rows ) ) : ?><li><span><?php esc_html_e( 'No events yet.', 'gt-analytics-dashboard' ); ?></span></li><?php else : foreach ( array_slice( $rows, 0, 10 ) as $row ) : ?>
-			<li><span class="gtad-truncate"><?php echo esc_html( isset( $row['name'] ) ? (string) $row['name'] : '—' ); ?><small><?php echo esc_html( isset( $row['type'] ) ? (string) $row['type'] : '' ); ?></small></span><strong><?php echo esc_html( number_format_i18n( isset( $row['count'] ) ? (int) $row['count'] : 0 ) ); ?></strong></li>
-		<?php endforeach; endif; ?></ol></section>
-		<?php
+	private function render_events_table( array $rows, array $details = array(), $range = '', $base_url = '' ) {
+		$groups = array(
+			'conversion' => __( 'Conversions', 'gt-analytics-dashboard' ),
+			'event'      => __( 'Events', 'gt-analytics-dashboard' ),
+		);
+		foreach ( $groups as $type => $title ) {
+			$group_rows = array_values( array_filter( $rows, function ( $row ) use ( $type ) { return is_array( $row ) && isset( $row['type'] ) && $type === (string) $row['type']; } ) );
+			?>
+			<section class="gtad-panel"><h2><?php echo esc_html( sprintf( __( '%1$s · %2$s', 'gt-analytics-dashboard' ), $title, $range ) ); ?></h2><ol class="gtad-ranked-list gtad-event-list">
+			<?php if ( empty( $group_rows ) ) : ?><li><span><?php echo esc_html( 'conversion' === $type ? __( 'No conversions yet.', 'gt-analytics-dashboard' ) : __( 'No events yet.', 'gt-analytics-dashboard' ) ); ?></span></li><?php else : foreach ( array_slice( $group_rows, 0, 10 ) as $row ) :
+				$name     = isset( $row['name'] ) ? (string) $row['name'] : '—';
+				$matching = array_values( array_filter( $details, function ( $detail ) use ( $name, $type ) { return is_array( $detail ) && isset( $detail['name'], $detail['type'] ) && $name === (string) $detail['name'] && $type === (string) $detail['type']; } ) );
+				?>
+				<li><details class="gtad-event"><summary><span><strong><?php echo esc_html( $name ); ?></strong><small><?php echo esc_html( count( $matching ) . ' ' . __( 'contexts', 'gt-analytics-dashboard' ) ); ?></small></span><span class="gtad-event__total"><?php echo esc_html( number_format_i18n( isset( $row['count'] ) ? (int) $row['count'] : 0 ) ); ?><?php if ( ! empty( $row['value'] ) ) : ?><small><?php echo esc_html( number_format_i18n( (float) $row['value'], 2 ) ); ?></small><?php endif; ?></span></summary><?php if ( ! empty( $matching ) ) : ?><ol class="gtad-event__details"><?php foreach ( array_slice( $matching, 0, 25 ) as $detail ) : $path = ! empty( $detail['path'] ) ? (string) $detail['path'] : '/'; $url = $this->page_url( $base_url, $path ); $meta = array_filter( array( isset( $detail['channel'] ) ? $detail['channel'] : '', isset( $detail['referrerHost'] ) ? $detail['referrerHost'] : '', isset( $detail['utmCampaign'] ) && $detail['utmCampaign'] ? 'campaign: ' . $detail['utmCampaign'] : '', isset( $detail['utmSource'] ) && $detail['utmSource'] ? 'source: ' . $detail['utmSource'] : '', isset( $detail['utmMedium'] ) && $detail['utmMedium'] ? 'medium: ' . $detail['utmMedium'] : '', isset( $detail['country'] ) ? $detail['country'] : '' ) ); ?><li><span><strong><?php echo esc_html( ! empty( $detail['label'] ) ? (string) $detail['label'] : $path ); ?></strong><small><?php if ( $url ) : ?><a href="<?php echo esc_url( $url ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $path ); ?></a><?php else : echo esc_html( $path ); endif; ?><?php echo $meta ? ' · ' . esc_html( implode( ' · ', array_map( 'strval', $meta ) ) ) : ''; ?></small></span><span><strong><?php echo esc_html( number_format_i18n( isset( $detail['count'] ) ? (int) $detail['count'] : 0 ) ); ?></strong><?php if ( ! empty( $detail['value'] ) ) : ?><small><?php echo esc_html( number_format_i18n( (float) $detail['value'], 2 ) . ( ! empty( $detail['currency'] ) ? ' ' . $detail['currency'] : '' ) ); ?></small><?php endif; ?></span></li><?php endforeach; ?></ol><?php endif; ?></details></li>
+			<?php endforeach; endif; ?></ol></section>
+			<?php
+		}
 	}
 
 	/** @return void */
@@ -528,20 +553,84 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 		<section class="gtad-dimensions"><h2><?php esc_html_e( 'Audience and acquisition', 'gt-analytics-dashboard' ); ?></h2><div class="gtad-dashboard-grid">
 		<?php foreach ( $labels as $key => $label ) : $rows = isset( $dimensions[ $key ] ) && is_array( $dimensions[ $key ] ) ? $dimensions[ $key ] : array(); ?>
 			<section class="gtad-panel"><h3><?php echo esc_html( $label ); ?></h3><ol class="gtad-ranked-list">
-			<?php if ( empty( $rows ) ) : ?><li><span>—</span></li><?php else : foreach ( array_slice( $rows, 0, 10 ) as $row ) : ?><li><span class="gtad-truncate"><?php echo esc_html( isset( $row['value'] ) && '' !== $row['value'] ? (string) $row['value'] : __( 'Unknown', 'gt-analytics-dashboard' ) ); ?></span><strong><?php echo esc_html( number_format_i18n( isset( $row['views'] ) ? (int) $row['views'] : 0 ) ); ?></strong></li><?php endforeach; endif; ?>
+			<?php if ( empty( $rows ) ) : ?><li><span>—</span></li><?php else : foreach ( array_slice( $rows, 0, 10 ) as $row ) : $value = isset( $row['value'] ) && '' !== $row['value'] ? (string) $row['value'] : __( 'Unknown', 'gt-analytics-dashboard' ); ?><li><button type="button" class="button-link gtad-filter-link gtad-truncate" data-gtad-filter-key="<?php echo esc_attr( $key ); ?>" data-gtad-filter-value="<?php echo esc_attr( $value ); ?>"><?php echo esc_html( $value ); ?></button><strong><?php echo esc_html( number_format_i18n( isset( $row['views'] ) ? (int) $row['views'] : 0 ) ); ?></strong></li><?php endforeach; endif; ?>
 			</ol></section>
 		<?php endforeach; ?></div></section>
 		<?php
 	}
 
 	/** @return void */
-	private function render_live_feed( array $feed, $now ) {
+	private function render_live_feed( array $feed, $now, $base_url = '' ) {
 		?>
 		<section class="gtad-panel gtad-panel--wide"><h2><?php esc_html_e( 'Live activity feed', 'gt-analytics-dashboard' ); ?></h2><ol class="gtad-live-feed">
 		<?php if ( empty( $feed ) ) : ?><li><?php esc_html_e( 'No activity in the current real-time window.', 'gt-analytics-dashboard' ); ?></li><?php else : foreach ( array_slice( $feed, 0, 20 ) as $item ) : $then = isset( $item['t'] ) ? (int) $item['t'] : $now; ?>
-			<li><span class="gtad-truncate"><strong><?php echo esc_html( isset( $item['kind'] ) && 'conversion' === $item['kind'] ? ( isset( $item['name'] ) ? (string) $item['name'] : __( 'Conversion', 'gt-analytics-dashboard' ) ) : ( isset( $item['path'] ) ? (string) $item['path'] : '/' ) ); ?></strong><small><?php echo esc_html( isset( $item['referrerHost'] ) && '' !== $item['referrerHost'] ? (string) $item['referrerHost'] : ( isset( $item['channel'] ) ? (string) $item['channel'] : 'direct' ) ); ?><?php echo ! empty( $item['country'] ) ? ' · ' . esc_html( (string) $item['country'] ) : ''; ?></small></span><time><?php echo esc_html( $this->relative_time( $then, $now ) ); ?></time></li>
+			<?php $is_conversion = isset( $item['kind'] ) && 'conversion' === $item['kind']; $path = isset( $item['path'] ) ? (string) $item['path'] : '/'; $url = $this->page_url( $base_url, $path ); $label = $is_conversion ? ( isset( $item['name'] ) ? (string) $item['name'] : __( 'Conversion', 'gt-analytics-dashboard' ) ) : $path; ?>
+			<li><span class="gtad-truncate"><strong><?php if ( ! $is_conversion && $url ) : ?><a href="<?php echo esc_url( $url ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $label ); ?></a><?php else : echo esc_html( $label ); endif; ?></strong><small><?php $referrer = isset( $item['referrerHost'] ) && '' !== $item['referrerHost'] ? (string) $item['referrerHost'] : ''; ?><?php if ( $referrer ) : ?><a href="<?php echo esc_url( 'https://' . $referrer ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $referrer ); ?></a><?php else : echo esc_html( isset( $item['channel'] ) ? (string) $item['channel'] : 'direct' ); endif; ?><?php echo ! empty( $item['country'] ) ? ' · ' . esc_html( (string) $item['country'] ) : ''; ?></small></span><time><?php echo esc_html( $this->relative_time( $then, $now ) ); ?></time></li>
 		<?php endforeach; endif; ?></ol></section>
 		<?php
+	}
+
+	/** @return void */
+	private function render_report_controls( $interval, array $filters ) {
+		$presets = array(
+			'today'     => __( 'Today', 'gt-analytics-dashboard' ),
+			'yesterday' => __( 'Yesterday', 'gt-analytics-dashboard' ),
+			'1d'        => __( '1 day', 'gt-analytics-dashboard' ),
+			'7d'        => __( '7 days', 'gt-analytics-dashboard' ),
+			'30d'       => __( '30 days', 'gt-analytics-dashboard' ),
+			'90d'       => __( '90 days', 'gt-analytics-dashboard' ),
+			'180d'      => __( '6 months', 'gt-analytics-dashboard' ),
+			'365d'      => __( '12 months', 'gt-analytics-dashboard' ),
+		);
+		$is_custom = false !== strpos( $interval, '..' );
+		$dates     = $is_custom ? explode( '..', $interval, 2 ) : array( '', '' );
+		$channels  = array( '' => __( 'All traffic', 'gt-analytics-dashboard' ), 'ai' => __( 'AI assistants', 'gt-analytics-dashboard' ), 'search' => __( 'Search', 'gt-analytics-dashboard' ), 'social' => __( 'Social', 'gt-analytics-dashboard' ), 'paid' => __( 'Paid', 'gt-analytics-dashboard' ), 'referral' => __( 'Referrals', 'gt-analytics-dashboard' ), 'direct' => __( 'Direct', 'gt-analytics-dashboard' ) );
+		?>
+		<div class="gtad-report-controls">
+			<div class="gtad-range-control"><label for="gtad-interval"><?php esc_html_e( 'Range', 'gt-analytics-dashboard' ); ?></label><select id="gtad-interval" data-gtad-interval data-gtad-current-interval="<?php echo esc_attr( $interval ); ?>"><?php foreach ( $presets as $value => $label ) : ?><option value="<?php echo esc_attr( $value ); ?>" <?php selected( $is_custom ? '' : $interval, $value ); ?>><?php echo esc_html( $label ); ?></option><?php endforeach; ?><option value="custom" <?php selected( $is_custom ); ?>><?php esc_html_e( 'Custom range…', 'gt-analytics-dashboard' ); ?></option></select><span class="gtad-custom-range<?php echo $is_custom ? ' is-visible' : ''; ?>"><input type="date" value="<?php echo esc_attr( $dates[0] ); ?>" data-gtad-range-start aria-label="<?php esc_attr_e( 'Start date', 'gt-analytics-dashboard' ); ?>"><span>–</span><input type="date" value="<?php echo esc_attr( $dates[1] ); ?>" data-gtad-range-end aria-label="<?php esc_attr_e( 'End date', 'gt-analytics-dashboard' ); ?>"><button type="button" class="button" data-gtad-range-apply><?php esc_html_e( 'Apply', 'gt-analytics-dashboard' ); ?></button></span></div>
+			<nav class="gtad-channel-tabs" aria-label="<?php esc_attr_e( 'Traffic view', 'gt-analytics-dashboard' ); ?>"><?php foreach ( $channels as $value => $label ) : ?><button type="button" class="<?php echo esc_attr( ( isset( $filters['channel'] ) ? $filters['channel'] : '' ) === $value ? 'is-active' : '' ); ?>" data-gtad-channel="<?php echo esc_attr( $value ); ?>"><?php echo esc_html( $label ); ?></button><?php endforeach; ?></nav>
+			<?php if ( ! empty( $filters ) ) : ?><div class="gtad-filter-badges" aria-label="<?php esc_attr_e( 'Active filters', 'gt-analytics-dashboard' ); ?>"><?php foreach ( $filters as $key => $value ) : ?><span data-gtad-active-filter data-filter-key="<?php echo esc_attr( $key ); ?>" data-filter-value="<?php echo esc_attr( $value ); ?>"><small><?php echo esc_html( $key ); ?></small> <?php echo esc_html( $value ); ?><button type="button" data-gtad-filter-remove="<?php echo esc_attr( $key ); ?>" aria-label="<?php echo esc_attr( sprintf( __( 'Remove %s filter', 'gt-analytics-dashboard' ), $key ) ); ?>">×</button></span><?php endforeach; ?><button type="button" class="button-link" data-gtad-filters-clear><?php esc_html_e( 'Clear all', 'gt-analytics-dashboard' ); ?></button></div><?php endif; ?>
+		</div>
+		<?php
+	}
+
+	/** @return string */
+	private function request_interval() {
+		return isset( $_GET['interval'] ) ? $this->sanitize_interval( wp_unslash( $_GET['interval'] ) ) : '30d';
+	}
+
+	/** @return string */
+	private function sanitize_interval( $value ) {
+		$value = sanitize_text_field( (string) $value );
+		if ( in_array( $value, array( 'today', 'yesterday', '1d', '7d', '30d', '90d', '180d', '365d' ), true ) ) return $value;
+		if ( preg_match( '/^\d{4}-\d{2}-\d{2}\.\.\d{4}-\d{2}-\d{2}$/', $value ) ) return $value;
+		return '30d';
+	}
+
+	/** @return array<string, string> */
+	private function request_filters( $source = null ) {
+		$source  = is_array( $source ) ? $source : $_GET;
+		$allowed = array( 'path', 'referrer', 'deviceModel', 'deviceType', 'country', 'browserName', 'browserVersion', 'utmSource', 'utmMedium', 'utmCampaign', 'utmTerm', 'utmContent', 'channel', 'referrerHost' );
+		$out     = array();
+		foreach ( $allowed as $key ) {
+			if ( ! isset( $source[ $key ] ) ) continue;
+			$value = sanitize_text_field( wp_unslash( $source[ $key ] ) );
+			if ( '' !== $value && strlen( $value ) <= 500 && false === strpos( $value, "'" ) ) $out[ $key ] = $value;
+		}
+		return $out;
+	}
+
+	/** @return string */
+	private function interval_label( $interval ) {
+		$labels = array( 'today' => __( 'Today', 'gt-analytics-dashboard' ), 'yesterday' => __( 'Yesterday', 'gt-analytics-dashboard' ), '1d' => __( '1 day', 'gt-analytics-dashboard' ), '7d' => __( '7 days', 'gt-analytics-dashboard' ), '30d' => __( '30 days', 'gt-analytics-dashboard' ), '90d' => __( '90 days', 'gt-analytics-dashboard' ), '180d' => __( '6 months', 'gt-analytics-dashboard' ), '365d' => __( '12 months', 'gt-analytics-dashboard' ) );
+		return isset( $labels[ $interval ] ) ? $labels[ $interval ] : str_replace( '..', ' to ', (string) $interval );
+	}
+
+	/** @return string */
+	private function page_url( $base_url, $path ) {
+		$base_url = untrailingslashit( (string) $base_url );
+		if ( '' === $base_url || ! preg_match( '#^https://#i', $base_url ) ) return '';
+		return $base_url . '/' . ltrim( (string) $path, '/' );
 	}
 
 	/** @return string */
@@ -574,7 +663,7 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 
 	/** @return void */
 	private function render_series( array $series ) {
-		$series = array_slice( $series, -7 );
+		$series = array_slice( $series, -366 );
 		$max    = 0;
 		foreach ( $series as $point ) {
 			$max = max( $max, is_array( $point ) && isset( $point['views'] ) ? (int) $point['views'] : 0 );
@@ -583,23 +672,25 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 			return;
 		}
 		?>
-		<div class="gtad-series" aria-label="<?php esc_attr_e( 'Views during the last seven days', 'gt-analytics-dashboard' ); ?>">
+		<div class="gtad-series-wrap"><div class="gtad-series-legend"><span><i class="is-visitors"></i><?php esc_html_e( 'Visitors', 'gt-analytics-dashboard' ); ?></span><span><i class="is-views"></i><?php esc_html_e( 'Views', 'gt-analytics-dashboard' ); ?></span></div><div class="gtad-series" style="--gtad-points: <?php echo esc_attr( count( $series ) ); ?>" aria-label="<?php esc_attr_e( 'Visitors and views during the selected period', 'gt-analytics-dashboard' ); ?>">
 			<?php foreach ( $series as $point ) :
 				$views  = is_array( $point ) && isset( $point['views'] ) ? (int) $point['views'] : 0;
+				$visitors = is_array( $point ) && isset( $point['visitors'] ) ? (int) $point['visitors'] : 0;
 				$date   = is_array( $point ) && isset( $point['date'] ) ? strtotime( (string) $point['date'] ) : false;
 				$height = $max > 0 ? max( 4, (int) round( ( $views / $max ) * 100 ) ) : 0;
 				?>
-				<div class="gtad-series__day" title="<?php echo esc_attr( sprintf( __( '%s views', 'gt-analytics-dashboard' ), number_format_i18n( $views ) ) ); ?>">
+				<div class="gtad-series__day" title="<?php echo esc_attr( sprintf( __( '%1$s visitors, %2$s views', 'gt-analytics-dashboard' ), number_format_i18n( $visitors ), number_format_i18n( $views ) ) ); ?>">
+					<span class="gtad-series__values"><b><?php echo esc_html( number_format_i18n( $visitors ) ); ?></b><b><?php echo esc_html( number_format_i18n( $views ) ); ?></b></span>
 					<span class="gtad-series__bar"><i style="--gtad-height: <?php echo esc_attr( $height ); ?>%"></i></span>
-					<small><?php echo esc_html( $date ? wp_date( 'D', $date ) : '—' ); ?></small>
+					<small><?php echo esc_html( $date ? wp_date( count( $series ) > 7 ? 'M j' : 'D', $date ) : '—' ); ?></small>
 				</div>
 			<?php endforeach; ?>
-		</div>
+		</div></div>
 		<?php
 	}
 
 	/** @return void */
-	private function render_top_paths( array $paths ) {
+	private function render_top_paths( array $paths, $base_url = '' ) {
 		$paths = array_slice( $paths, 0, 3 );
 		if ( empty( $paths ) ) {
 			return;
@@ -610,7 +701,7 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 				$path  = is_array( $row ) && isset( $row[0] ) ? (string) $row[0] : '/';
 				$count = is_array( $row ) && isset( $row[1] ) ? (int) $row[1] : 0;
 				?>
-				<li><span title="<?php echo esc_attr( $path ); ?>"><?php echo esc_html( $path ); ?></span><strong><?php echo esc_html( number_format_i18n( $count ) ); ?></strong></li>
+				<li><span title="<?php echo esc_attr( $path ); ?>"><?php $url = $this->page_url( $base_url, $path ); if ( $url ) : ?><a href="<?php echo esc_url( $url ); ?>" target="_blank" rel="noopener noreferrer"><?php echo esc_html( $path ); ?></a><?php else : echo esc_html( $path ); endif; ?></span><strong><?php echo esc_html( number_format_i18n( $count ) ); ?></strong></li>
 			<?php endforeach; ?>
 		</ol></div>
 		<?php

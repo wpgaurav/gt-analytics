@@ -4,17 +4,17 @@ Tags: analytics, dashboard, realtime, privacy
 Requires at least: 6.5
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.1.0
+Stable tag: 1.2.0
 License: MIT
 License URI: https://opensource.org/license/mit/
 
-Show GT Analytics real-time and seven-day statistics in the WordPress dashboard.
+Show the complete read-only GT Analytics experience in the WordPress dashboard.
 
 == Description ==
 
-GT Analytics Dashboard connects WordPress to a site-scoped GT Analytics API key. It adds a top-level GT Analytics admin screen with the complete real-time and seven-day analytics dashboard, plus a compact Dashboard Home widget.
+GT Analytics Dashboard connects WordPress to a site-scoped GT Analytics API key. It adds a top-level GT Analytics admin screen with full read-only reporting, real-time data, linked pages and referrers, range and traffic filters, and detailed conversions, plus a compact Dashboard Home widget.
 
-The API key remains server-side. Browser JavaScript calls a nonce-protected WordPress AJAX action and never receives the upstream credential. Full reports remain in the GT Analytics website.
+The API key remains server-side. Browser JavaScript calls a nonce-protected WordPress AJAX action and never receives the upstream credential. The WordPress screen exposes the complete read-only report, while account and tracking changes remain in the GT Analytics website.
 
 == Installation ==
 
@@ -33,6 +33,9 @@ This plugin connects to the GT Analytics installation URL configured by the site
 GT Analytics is self-hostable software. Its source, documentation, privacy notes, and license are available at https://github.com/wpgaurav/gt-analytics. Data handling is governed by the operator of the configured GT Analytics installation.
 
 == Changelog ==
+
+= 1.2.0 =
+* Added complete read-only reports with 30-day default, preset and custom ranges, filters, linked URLs, labeled visitor/view charts, and expandable conversion attribution.
 
 = 1.1.0 =
 * Require a site-scoped API key and derive the site automatically.

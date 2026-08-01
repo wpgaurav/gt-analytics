@@ -4,6 +4,11 @@ This package builds the installable WordPress plugin that adds a top-level
 **GT Analytics** menu with a complete native analytics dashboard. It also keeps
 the compact preview under **Dashboard > Home**.
 
+The full screen mirrors the website's read-only reporting: a 30-day default,
+all preset and custom ranges, traffic filters, linked pages and referrers,
+visitor/view labels on the trend chart, acquisition and audience dimensions,
+real-time activity, and expandable conversion attribution.
+
 ## Requirements
 
 - WordPress 6.5 or newer

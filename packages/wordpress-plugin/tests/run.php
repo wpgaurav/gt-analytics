@@ -60,11 +60,29 @@ gtad_test(
 			return gtad_response( array( 'summary' => array() ) );
 		};
 
-		gtad_client()->get_seven_day_analytics();
+		gtad_client()->get_analytics();
 		parse_str( parse_url( $url, PHP_URL_QUERY ), $query );
 		gtad_assert( ! isset( $query['site'] ), 'Site ID should come from the scoped key.' );
-		gtad_assert( '7d' === $query['interval'], 'Seven-day interval was not sent.' );
+		gtad_assert( '30d' === $query['interval'], 'Thirty-day default interval was not sent.' );
 		gtad_assert( 'Asia/Kolkata' === $query['timezone'], 'Timezone was not sent.' );
+	}
+);
+
+gtad_test(
+	'sends supported report ranges and filters to the read API',
+	function () {
+		$url = '';
+		$GLOBALS['gtad_http_callback'] = function ( $request_url ) use ( &$url ) {
+			$url = $request_url;
+			return gtad_response( array( 'summary' => array() ) );
+		};
+
+		gtad_client()->get_analytics( '2026-07-01..2026-07-31', array( 'channel' => 'search', 'country' => 'IN', 'ignored' => 'nope' ) );
+		parse_str( parse_url( $url, PHP_URL_QUERY ), $query );
+		gtad_assert( '2026-07-01..2026-07-31' === $query['interval'], 'Custom range was not sent.' );
+		gtad_assert( 'search' === $query['channel'], 'Channel filter was not sent.' );
+		gtad_assert( 'IN' === $query['country'], 'Country filter was not sent.' );
+		gtad_assert( ! isset( $query['ignored'] ), 'Unknown filters must not be forwarded.' );
 	}
 );
 
@@ -83,7 +101,7 @@ gtad_test(
 );
 
 gtad_test(
-	'caches seven-day data and allows an explicit realtime refresh',
+	'caches range data and allows an explicit realtime refresh',
 	function () {
 		$GLOBALS['gtad_transients'] = array();
 		$calls = array( 'sites' => 0, 'analytics' => 0, 'realtime' => 0 );
@@ -107,7 +125,7 @@ gtad_test(
 		gtad_assert( 1 === $calls['analytics'], 'Seven-day data should be cached.' );
 		gtad_assert( 1 === $calls['realtime'], 'Realtime data should use its short cache.' );
 		$service->get_snapshot( true );
-		gtad_assert( 1 === $calls['analytics'], 'Realtime refresh must not refetch seven-day data.' );
+		gtad_assert( 1 === $calls['analytics'], 'Realtime refresh must not refetch historical data.' );
 		gtad_assert( 2 === $calls['realtime'], 'Forced realtime refresh did not call the API.' );
 	}
 );
