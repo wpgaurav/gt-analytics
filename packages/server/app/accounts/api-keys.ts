@@ -53,6 +53,13 @@ export async function revokeApiKey(db: D1Database, accountId: string, id: string
     ).bind(id, accountId).run();
 }
 
+export async function deleteApiKey(db: D1Database, accountId: string, id: string): Promise<boolean> {
+    const result = await db.prepare(
+        "DELETE FROM api_keys WHERE id = ? AND account_id = ?",
+    ).bind(id, accountId).run();
+    return (result.meta?.changes ?? 0) > 0;
+}
+
 export async function authenticateApiKey(
     db: D1Database,
     token: string,

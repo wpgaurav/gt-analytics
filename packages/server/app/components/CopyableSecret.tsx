@@ -1,16 +1,23 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 
 interface CopyableSecretProps {
     value: string;
     label: string;
+    focusOnMount?: boolean;
 }
 
 type CopyStatus = "idle" | "copied" | "error";
 
-export default function CopyableSecret({ value, label }: CopyableSecretProps) {
+export default function CopyableSecret({ value, label, focusOnMount = false }: CopyableSecretProps) {
     const fieldId = useId();
     const fieldRef = useRef<HTMLTextAreaElement>(null);
     const [status, setStatus] = useState<CopyStatus>("idle");
+
+    useEffect(() => {
+        if (!focusOnMount || !fieldRef.current) return;
+        fieldRef.current.focus();
+        fieldRef.current.select();
+    }, [focusOnMount]);
 
     async function copyValue() {
         let copied = false;

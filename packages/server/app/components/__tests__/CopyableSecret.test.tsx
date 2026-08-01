@@ -30,6 +30,12 @@ describe("CopyableSecret", () => {
         expect(screen.getByRole("button", { name: "Copy API key" })).toBeInTheDocument();
     });
 
+    test("can focus the one-time value immediately after creation", () => {
+        render(<CopyableSecret value="gta_new_secret" label="API key" focusOnMount />);
+
+        expect(screen.getByRole("textbox", { name: "Full API key" })).toHaveFocus();
+    });
+
     test("copies the exact value and announces success", async () => {
         const token = "gta_prefix_secret";
         render(<CopyableSecret value={token} label="API key" />);

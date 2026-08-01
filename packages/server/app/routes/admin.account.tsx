@@ -21,7 +21,7 @@ import {
     listAccountInvitations,
     revokeAccountInvitation,
 } from "~/accounts/invitations";
-import { createApiKey, listApiKeys, revokeApiKey } from "~/accounts/api-keys";
+import { createApiKey, deleteApiKey, listApiKeys, revokeApiKey } from "~/accounts/api-keys";
 import { deletePasskey, listPasskeys } from "~/accounts/passkeys";
 import CopyableSecret from "~/components/CopyableSecret";
 import { getUserById, requireAuth } from "~/lib/auth";
@@ -71,6 +71,12 @@ export async function action({ request, context }: ActionFunctionArgs) {
     if (intent === "revoke-key") {
         await revokeApiKey(db, user.accountId!, String(form.get("key_id") || ""));
         return { notice: "API key revoked." };
+    }
+    if (intent === "delete-key") {
+        const deleted = await deleteApiKey(db, user.accountId!, String(form.get("key_id") || ""));
+        return deleted
+            ? { notice: "API key permanently deleted." }
+            : { error: "API key not found." };
     }
     if (intent === "delete-passkey" && user.userId) {
         await deletePasskey(db, user.userId, String(form.get("credential_id") || ""));
@@ -149,7 +155,6 @@ export default function AccountSettings() {
         </header>
         {result?.notice && <div className="flash flash--ok">{result.notice}</div>}
         {result?.error && <div className="flash flash--error" role="alert">{result.error}</div>}
-        {result?.token && <div className="card"><div className="card-head"><h2>New API key</h2></div><div className="card-body stack-md"><p>Copy this credential now. Only its hash is stored.</p><CopyableSecret value={result.token} label="API key" /></div></div>}
         {result?.inviteUrl && <div className="card"><div className="card-head"><h2>New invitation</h2></div><div className="card-body stack-md"><p>Send this single-use link to the account owner. It cannot be shown again.</p><CopyableSecret value={result.inviteUrl} label="invitation link" /></div></div>}
 
         <section className="card"><div className="card-head"><h2>Account settings</h2></div><div className="card-body">
@@ -173,9 +178,10 @@ export default function AccountSettings() {
         </div></section>
 
         <section className="card"><div className="card-head"><h2>API keys</h2></div><div className="card-body stack-md">
-            <p className="muted">Keys can read this account&rsquo;s analytics and real-time data. Store them server-side, including in WordPress.</p>
-            {data.apiKeys.map((key) => <div className="setting-row" key={key.id}><div><strong>{key.name}</strong><div className="cell-sub mono">gta_{key.prefix}_… · {key.revoked_at ? "revoked" : key.last_used_at ? `used ${new Date(key.last_used_at).toLocaleDateString()}` : "never used"}</div></div>{!key.revoked_at && <Form method="post"><input type="hidden" name="intent" value="revoke-key" /><input type="hidden" name="key_id" value={key.id} /><button className="btn btn-ghost btn-sm">Revoke</button></Form>}</div>)}
+            <p className="muted">Keys can read this account&rsquo;s analytics and real-time data. Store them server-side, including in WordPress. For security, the full key is shown only once after creation; saved rows show only a non-secret prefix.</p>
+            {data.apiKeys.map((key) => <div className="setting-row" key={key.id}><div><strong>{key.name}</strong><div className="cell-sub mono">gta_{key.prefix}_… · {key.revoked_at ? "revoked" : key.last_used_at ? `used ${new Date(key.last_used_at).toLocaleDateString()}` : "never used"}</div></div><div className="setting-row__actions">{!key.revoked_at && <Form method="post"><input type="hidden" name="intent" value="revoke-key" /><input type="hidden" name="key_id" value={key.id} /><button className="btn btn-ghost btn-sm" disabled={busy}>Revoke</button></Form>}<Form method="post" onSubmit={(event) => { if (!confirm(`Permanently delete the API key “${key.name}”? This cannot be undone.`)) event.preventDefault(); }}><input type="hidden" name="intent" value="delete-key" /><input type="hidden" name="key_id" value={key.id} /><button className="btn btn-danger btn-sm" disabled={busy}>Delete</button></Form></div></div>)}
             <Form method="post" className="form-inline"><input type="hidden" name="intent" value="create-key" /><label className="visually-hidden" htmlFor="key-name">Key name</label><input className="input" id="key-name" name="key_name" placeholder="WordPress dashboard" required /><button className="btn btn-primary" disabled={busy}>Create key</button></Form>
+            {result?.token && <div className="one-time-credential" role="region" aria-labelledby="new-api-key-heading"><div><h3 id="new-api-key-heading">New API key</h3><p>Copy this credential now. It cannot be shown again.</p></div><CopyableSecret value={result.token} label="API key" focusOnMount /></div>}
         </div></section>
 
         {data.user.isSystemAdmin && <section className="card"><div className="card-head"><h2>Accounts &amp; invitations</h2></div><div className="card-body stack-md">

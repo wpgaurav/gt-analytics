@@ -1703,6 +1703,14 @@
 
 .setting-row:last-child { border-bottom: 0; }
 
+.setting-row__actions {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: .5rem;
+    flex-wrap: wrap;
+}
+
 .form-inline {
     display: flex;
     gap: .75rem;
@@ -1758,8 +1766,31 @@
     font-size: .82rem;
 }
 
+.one-time-credential {
+    display: grid;
+    gap: 1rem;
+    padding: 1rem;
+    border: 1px solid var(--brand-200, #bfdbfe);
+    border-radius: var(--radius-md, .5rem);
+    background: var(--brand-50, #eff6ff);
+}
+
+.one-time-credential h3,
+.one-time-credential p {
+    margin: 0;
+}
+
+.one-time-credential p {
+    margin-block-start: .25rem;
+    color: var(--ink-600);
+}
+
 @media (max-width: 640px) {
     .settings-grid { grid-template-columns: 1fr; }
     .form-inline { align-items: stretch; flex-direction: column; }
-    .setting-row { align-items: flex-start; }
+    .setting-row {
+        align-items: flex-start;
+        flex-direction: column;
+    }
+    .setting-row__actions { justify-content: flex-start; }
 }

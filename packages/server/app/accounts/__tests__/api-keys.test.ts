@@ -1,5 +1,5 @@
 import { describe, expect, test, vi } from "vitest";
-import { authenticateApiKey } from "../api-keys";
+import { authenticateApiKey, deleteApiKey } from "../api-keys";
 import { sha256 } from "~/lib/crypto";
 
 describe("authenticateApiKey", () => {
@@ -22,5 +22,30 @@ describe("authenticateApiKey", () => {
             scopes: ["analytics:read", "realtime:read"],
         });
         expect(bind).toHaveBeenNthCalledWith(1, "abc_def-");
+    });
+});
+
+describe("deleteApiKey", () => {
+    test("permanently deletes only the key belonging to the current account", async () => {
+        const run = vi.fn(async () => ({ success: true, meta: { changes: 1 } }));
+        const bind = vi.fn(() => ({ run }));
+        const prepare = vi.fn(() => ({ bind }));
+        const db = { prepare } as unknown as D1Database;
+
+        await expect(deleteApiKey(db, "acct_one", "key_one")).resolves.toBe(true);
+
+        expect(prepare).toHaveBeenCalledWith(
+            "DELETE FROM api_keys WHERE id = ? AND account_id = ?",
+        );
+        expect(bind).toHaveBeenCalledWith("key_one", "acct_one");
+        expect(run).toHaveBeenCalledOnce();
+    });
+
+    test("reports when no account-scoped key was deleted", async () => {
+        const run = vi.fn(async () => ({ success: true, meta: { changes: 0 } }));
+        const bind = vi.fn(() => ({ run }));
+        const db = { prepare: vi.fn(() => ({ bind })) } as unknown as D1Database;
+
+        await expect(deleteApiKey(db, "acct_one", "key_other")).resolves.toBe(false);
     });
 });
