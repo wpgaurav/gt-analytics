@@ -57,7 +57,10 @@ export async function authenticateApiKey(
     db: D1Database,
     token: string,
 ): Promise<{ accountId: string; scopes: ApiScope[]; keyId: string } | null> {
-    const match = /^gta_([A-Za-z0-9_-]+)_([A-Za-z0-9_-]+)$/.exec(token);
+    // randomSecret(6) and randomSecret(32) always produce 8- and 43-character
+    // base64url values. Keep those boundaries explicit because `_` is valid
+    // inside either value and a greedy separator would reject valid keys.
+    const match = /^gta_([A-Za-z0-9_-]{8})_([A-Za-z0-9_-]{43})$/.exec(token);
     if (!match) return null;
     const row = await db.prepare(
         `SELECT id, account_id, token_hash, scopes, expires_at

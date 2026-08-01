@@ -29,6 +29,7 @@ Deployed as the Cloudflare Worker `counterscale-gauravtiwari` at `stats.gauravti
 | **Long-term history**               | Archives daily Analytics Engine data to R2 as Apache Arrow, imports older data, and transparently merges archive history with the live 90-day Analytics Engine window.                                  |
 | **Passwords and passkeys**          | Supports username/password login, opaque revocable sessions, and discoverable WebAuthn passkeys with device-level user verification. Existing installs bootstrap the first `owner` from their current password. |
 | **Account-scoped read API**         | Provides versioned sites, seven-day/full analytics, real-time snapshot, and OpenAPI endpoints for WordPress, automations, third-party clients, and AI tools. API keys are hashed, revocable, and account-scoped. |
+| **WordPress dashboard plugin**      | Adds a server-side, API-key-authenticated WordPress widget for real-time and seven-day statistics, with a direct link to the full analytics website. |
 | **Production deployment**           | Includes GitHub Actions deployment, explicit Cloudflare bindings, migrations, scheduled archival, and a one-command installer that provisions a fresh account.                                          |
 | **Core Forms Design System**        | Rebuilds the interface with [CFDS](https://github.com/wpgaurav/core-forms-design-system), bundled open fonts, and Lucide icons. No Tailwind or shadcn dependency is required.                           |
 
@@ -184,6 +185,23 @@ Use those responses for a compact WordPress preview and link the widget to the
 full GT Analytics website for report exploration. The API intentionally adds
 no analytics capability beyond the full website; it exposes the existing data
 in a stable, read-only shape.
+
+### Install the included WordPress plugin
+
+The installable plugin lives in [`packages/wordpress-plugin`](packages/wordpress-plugin).
+It adds **Settings > GT Analytics** and a responsive **GT Analytics** dashboard
+widget. The upstream API key remains in PHP; its 30-second browser refresh calls
+a nonce-protected WordPress AJAX action instead of calling GT Analytics directly.
+
+Build the ZIP with:
+
+```bash
+pnpm --filter @gt-analytics/wordpress-plugin build
+```
+
+For production sites, define `GT_ANALYTICS_API_URL`, `GT_ANALYTICS_API_KEY`, and
+`GT_ANALYTICS_SITE_ID` in `wp-config.php`. The settings screen also supports
+storing them in the WordPress options table when constants are not practical.
 
 ## License
 

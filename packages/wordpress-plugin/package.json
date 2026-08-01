@@ -1,0 +1,12 @@
+{
+    "name": "@gt-analytics/wordpress-plugin",
+    "version": "1.0.0",
+    "private": true,
+    "scripts": {
+        "build": "bash build.sh",
+        "lint": "find gt-analytics-dashboard tests -name '*.php' -print0 | xargs -0 -n1 php -l",
+        "test": "php tests/run.php",
+        "test-ci": "php tests/run.php",
+        "typecheck": "find gt-analytics-dashboard -name '*.php' -print0 | xargs -0 -n1 php -l"
+    }
+}
