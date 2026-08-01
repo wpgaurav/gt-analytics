@@ -3,7 +3,7 @@
  * Plugin Name: GT Analytics Dashboard
  * Plugin URI:  https://github.com/wpgaurav/gt-analytics
  * Description: Shows the complete read-only GT Analytics dashboard inside WordPress.
- * Version:     1.2.0
+ * Version:     1.2.1
  * Author:      Gaurav Tiwari
  * Author URI:  https://gauravtiwari.org/
  * License:     MIT
@@ -17,7 +17,7 @@ if ( ! defined( 'ABSPATH' ) ) {
 	exit;
 }
 
-define( 'GT_ANALYTICS_DASHBOARD_VERSION', '1.2.0' );
+define( 'GT_ANALYTICS_DASHBOARD_VERSION', '1.2.1' );
 define( 'GT_ANALYTICS_DASHBOARD_FILE', __FILE__ );
 define( 'GT_ANALYTICS_DASHBOARD_DIR', plugin_dir_path( __FILE__ ) );
 define( 'GT_ANALYTICS_DASHBOARD_URL', plugin_dir_url( __FILE__ ) );
