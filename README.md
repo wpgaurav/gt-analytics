@@ -21,7 +21,7 @@ Deployed as the Cloudflare Worker `counterscale-gauravtiwari` at `stats.gauravti
 | **Commerce and lead recipe**        | Includes a reusable browser integration for outbound clicks, downloads, affiliate links, Fluent Cart add-to-cart, checkout and purchase events, and Core Forms leads.                                   |
 | **Realtime analytics**              | Uses one Durable Object per site for a rolling 30-minute window, five-minute active visitors, views, conversions, top paths, channels, countries, referrers, and a live event feed.                     |
 | **All-site realtime view**          | Shows every managed site's current activity together instead of hiding the estate behind a site dropdown.                                                                                               |
-| **Multiple accounts and sites**     | Gives every account its own settings, users, passkeys, API keys, saved views, and managed sites. Site IDs remain globally unique because they are the tracker attribution key.                       |
+| **Multiple accounts and sites**     | Gives every account its own settings, users, passkeys, API keys, saved views, and managed sites. New accounts use expiring, single-use invitations. Site IDs remain globally unique because they are the tracker attribution key. |
 | **Remembered site selection**       | Keeps the selected property while moving between dashboard views and applies saved reports to the site currently being inspected.                                                                       |
 | **Saved report presets**            | Provides one-click Today, Last 7 days, AI, Search, Social, Paid, Referral, and Direct views, plus custom presets stored in D1.                                                                          |
 | **Pages report**                    | Adds a dedicated sortable page-performance view with views, visitors, bounce rate, average duration, conversions, conversion rate, and links back to the live page.                                     |
@@ -124,11 +124,16 @@ the current dashboard password. GT Analytics creates the default owner and
 moves future sessions into D1 as opaque, revocable credentials. The deployment
 password remains only as a bootstrap fallback when the users table is empty.
 
-The system administrator can create additional isolated accounts from
-**Account & API**. Each account has its own name, timezone, sites, saved views,
-passkeys, and API keys. Usernames and tracker site IDs are deployment-wide
-unique. Owners can add a passkey from the same screen and then use **Sign in
-with a passkey** without entering a username or password.
+The system administrator can create a seven-day, single-use invitation from
+**Account & API**. Send the generated link to the account owner; GT Analytics
+stores only its SHA-256 hash. The owner chooses their own username and password,
+and the link becomes unusable as soon as it is accepted. Invitations can also
+be revoked before use. There is no public signup route without a valid invite.
+
+Each account has its own name, timezone, sites, saved views, passkeys, and API
+keys. Usernames and tracker site IDs are deployment-wide unique. Owners can add
+a passkey from the same screen and then use **Sign in with a passkey** without
+entering a username or password.
 
 ## Read API
 

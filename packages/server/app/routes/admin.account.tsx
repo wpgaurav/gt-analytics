@@ -10,12 +10,17 @@ import {
     type LoaderFunctionArgs,
 } from "react-router";
 import {
-    createAccountWithOwner,
     getAccount,
     listAccounts,
     updateAccount,
     validAccountSlug,
 } from "~/accounts/accounts";
+import {
+    createAccountInvitation,
+    InvitationConflictError,
+    listAccountInvitations,
+    revokeAccountInvitation,
+} from "~/accounts/invitations";
 import { createApiKey, listApiKeys, revokeApiKey } from "~/accounts/api-keys";
 import { deletePasskey, listPasskeys } from "~/accounts/passkeys";
 import { getUserById, requireAuth } from "~/lib/auth";
@@ -29,6 +34,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         apiKeys: await listApiKeys(db, user.accountId!),
         passkeys: user.userId ? await listPasskeys(db, user.userId) : [],
         accounts: user.isSystemAdmin ? await listAccounts(db) : [],
+        invitations: user.isSystemAdmin ? await listAccountInvitations(db) : [],
     };
 }
 
@@ -69,22 +75,39 @@ export async function action({ request, context }: ActionFunctionArgs) {
         await deletePasskey(db, user.userId, String(form.get("credential_id") || ""));
         return { notice: "Passkey removed." };
     }
-    if (intent === "create-account") {
+    if (intent === "create-invitation") {
         if (!user.isSystemAdmin) throw new Response("Forbidden", { status: 403 });
         const name = String(form.get("account_name") || "").trim();
         const slug = String(form.get("slug") || "").trim().toLowerCase();
         const timezone = String(form.get("account_timezone") || "UTC").trim();
-        const username = String(form.get("username") || "").trim().toLowerCase();
-        const password = String(form.get("password") || "");
-        if (!name || !validAccountSlug(slug) || !/^[a-z0-9._-]{3,64}$/.test(username) || password.length < 12 || !validTimezone(timezone)) {
-            return { error: "Account details are invalid. Passwords must be at least 12 characters." };
+        if (!name || !validAccountSlug(slug) || !validTimezone(timezone)) {
+            return { error: "Enter a valid account name, slug, and IANA timezone." };
         }
         try {
-            await createAccountWithOwner(db, { name, slug, timezone, username, password });
-            return { notice: `Account ${name} created.` };
-        } catch {
-            return { error: "That account slug or username is already in use." };
+            const created = await createAccountInvitation(db, {
+                accountName: name,
+                accountSlug: slug,
+                accountTimezone: timezone,
+                createdByUserId: user.userId ?? null,
+            });
+            const inviteUrl = new URL("/signup", new URL(request.url).origin);
+            inviteUrl.searchParams.set("token", created.token);
+            return {
+                notice: `Invitation for ${name} created. It expires in seven days.`,
+                inviteUrl: inviteUrl.toString(),
+            };
+        } catch (error) {
+            return {
+                error: error instanceof InvitationConflictError
+                    ? error.message
+                    : "The invitation could not be created.",
+            };
         }
+    }
+    if (intent === "revoke-invitation") {
+        if (!user.isSystemAdmin) throw new Response("Forbidden", { status: 403 });
+        await revokeAccountInvitation(db, String(form.get("invitation_id") || ""));
+        return { notice: "Invitation revoked." };
     }
     return { error: "Unknown action." };
 }
@@ -126,6 +149,7 @@ export default function AccountSettings() {
         {result?.notice && <div className="flash flash--ok">{result.notice}</div>}
         {result?.error && <div className="flash flash--error" role="alert">{result.error}</div>}
         {result?.token && <div className="card"><div className="card-head"><h2>New API key</h2></div><div className="card-body stack-md"><p>Copy this credential now. Only its hash is stored.</p><code className="api-token">{result.token}</code></div></div>}
+        {result?.inviteUrl && <div className="card"><div className="card-head"><h2>New invitation</h2></div><div className="card-body stack-md"><p>Send this single-use link to the account owner. It cannot be shown again.</p><code className="api-token">{result.inviteUrl}</code></div></div>}
 
         <section className="card"><div className="card-head"><h2>Account settings</h2></div><div className="card-body">
             <Form method="post" className="stack-md">
@@ -153,14 +177,22 @@ export default function AccountSettings() {
             <Form method="post" className="form-inline"><input type="hidden" name="intent" value="create-key" /><label className="visually-hidden" htmlFor="key-name">Key name</label><input className="input" id="key-name" name="key_name" placeholder="WordPress dashboard" required /><button className="btn btn-primary" disabled={busy}>Create key</button></Form>
         </div></section>
 
-        {data.user.isSystemAdmin && <section className="card"><div className="card-head"><h2>Accounts</h2></div><div className="card-body stack-md">
-            <p className="muted">Create an isolated account with its own owner, sites, saved views, passkeys, and API keys.</p>
+        {data.user.isSystemAdmin && <section className="card"><div className="card-head"><h2>Accounts &amp; invitations</h2></div><div className="card-body stack-md">
+            <p className="muted">New accounts are invite-only. Create a seven-day, single-use link for the owner to choose their own username and password.</p>
             {data.accounts.map((account) => <div className="setting-row" key={account.id}><div><strong>{account.name}</strong><div className="cell-sub mono">{account.slug}</div></div><span className="pill pill--muted">{account.timezone}</span></div>)}
-            <Form method="post" className="settings-grid"><input type="hidden" name="intent" value="create-account" /><div className="field"><label htmlFor="new-account-name">Account name</label><input className="input" id="new-account-name" name="account_name" required /></div><div className="field"><label htmlFor="new-account-slug">Slug</label><input className="input" id="new-account-slug" name="slug" pattern="[a-z0-9-]+" required /></div><div className="field"><label htmlFor="new-account-timezone">Timezone</label><input className="input" id="new-account-timezone" name="account_timezone" defaultValue="UTC" required /></div><div className="field"><label htmlFor="new-owner">Owner username</label><input className="input" id="new-owner" name="username" autoComplete="off" required /></div><div className="field"><label htmlFor="new-password">Temporary password</label><input className="input" type="password" id="new-password" name="password" minLength={12} autoComplete="new-password" required /></div><div><button className="btn btn-primary" disabled={busy}>Create account</button></div></Form>
+            {data.invitations.map((invitation) => <div className="setting-row" key={invitation.id}><div><strong>{invitation.account_name}</strong><div className="cell-sub mono">{invitation.account_slug} · {invitationStatus(invitation)}</div></div>{!invitation.accepted_at && !invitation.revoked_at && invitation.expires_at > Math.floor(Date.now() / 1000) && <Form method="post"><input type="hidden" name="intent" value="revoke-invitation" /><input type="hidden" name="invitation_id" value={invitation.id} /><button className="btn btn-ghost btn-sm">Revoke</button></Form>}</div>)}
+            <Form method="post" className="settings-grid"><input type="hidden" name="intent" value="create-invitation" /><div className="field"><label htmlFor="new-account-name">Account name</label><input className="input" id="new-account-name" name="account_name" required /></div><div className="field"><label htmlFor="new-account-slug">Slug</label><input className="input" id="new-account-slug" name="slug" pattern="[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?" required /></div><div className="field"><label htmlFor="new-account-timezone">Timezone</label><input className="input" id="new-account-timezone" name="account_timezone" defaultValue="UTC" required /></div><div><button className="btn btn-primary" disabled={busy}>Create invitation</button></div></Form>
         </div></section>}
     </>;
 }
 
 function validTimezone(value: string): boolean {
     try { new Intl.DateTimeFormat("en", { timeZone: value }); return true; } catch { return false; }
+}
+
+function invitationStatus(invitation: { accepted_at: number | null; revoked_at: number | null; expires_at: number }): string {
+    if (invitation.accepted_at) return "accepted";
+    if (invitation.revoked_at) return "revoked";
+    if (invitation.expires_at <= Math.floor(Date.now() / 1000)) return "expired";
+    return `expires ${new Date(invitation.expires_at * 1000).toLocaleDateString()}`;
 }

@@ -1,6 +1,3 @@
-import bcrypt from "bcryptjs";
-import { randomId } from "~/lib/crypto";
-
 export const DEFAULT_ACCOUNT_ID = "acct_default";
 
 export interface Account {
@@ -41,25 +38,6 @@ export async function listAccounts(db: D1Database): Promise<Account[]> {
         "SELECT * FROM accounts ORDER BY name COLLATE NOCASE",
     ).all<Account>();
     return results ?? [];
-}
-
-export async function createAccountWithOwner(
-    db: D1Database,
-    input: { name: string; slug: string; timezone: string; username: string; password: string },
-): Promise<{ accountId: string; userId: string }> {
-    const accountId = randomId("acct", 12);
-    const userId = randomId("usr", 12);
-    const passwordHash = await bcrypt.hash(input.password, 12);
-    await db.batch([
-        db.prepare(
-            `INSERT INTO accounts (id, slug, name, timezone) VALUES (?, ?, ?, ?)`,
-        ).bind(accountId, input.slug, input.name, input.timezone),
-        db.prepare(
-            `INSERT INTO users (id, account_id, username, display_name, password_hash, role)
-             VALUES (?, ?, ?, ?, ?, 'owner')`,
-        ).bind(userId, accountId, input.username, input.username, passwordHash),
-    ]);
-    return { accountId, userId };
 }
 
 export function validAccountSlug(value: string): boolean {

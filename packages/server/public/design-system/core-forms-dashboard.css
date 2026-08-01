@@ -67,6 +67,12 @@
     }
 }
 
+/* Signed-out pages have no sidebar. Explicitly collapse the desktop shell to
+   one column so the main content cannot fall into the 210px navigation track. */
+.app-shell--auth {
+    grid-template-columns: minmax(0, 1fr);
+}
+
 .app-main {
     /* CFDS .nav is position:sticky at a hardcoded 68px. */
     padding-block: var(--gap-lg) var(--gap-xl);
@@ -74,6 +80,11 @@
     /* Grid child: without this a wide table refuses to shrink and pushes the
        page into horizontal scroll instead of scrolling inside .table-wrap. */
     min-width: 0;
+}
+
+.app-main--auth {
+    display: flex;
+    justify-content: center;
 }
 
 /* Every band of a page is separated by the same gap, whatever it is made of --
@@ -559,7 +570,9 @@
 
 /* Sign-in: a single centred card, no nav chrome around it. */
 .signin {
-    max-width: 420px;
+    width: min(100%, 440px);
+    max-width: 440px;
+    margin-inline: auto;
     margin-block-start: clamp(var(--gap-lg), 8vh, 96px);
 }
 
@@ -577,6 +590,53 @@
     margin: 0;
     color: var(--ink-600);
     font-size: 0.95rem;
+}
+
+.signin__divider {
+    display: flex;
+    align-items: center;
+    gap: var(--gap-sm);
+    margin-block: var(--gap-md);
+    color: var(--ink-400);
+    font-size: 0.78rem;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+}
+
+.signin__divider::before,
+.signin__divider::after {
+    content: "";
+    flex: 1;
+    height: 1px;
+    background: var(--ink-200);
+}
+
+.signin__invite {
+    margin: var(--gap-md) 0 0;
+    color: var(--ink-500);
+    font-size: 0.82rem;
+    line-height: 1.55;
+    text-align: center;
+}
+
+.signin .btn {
+    min-height: 46px;
+    white-space: normal;
+}
+
+@media (max-width: 560px) {
+    .app-main--auth {
+        padding-block-start: var(--gap-sm);
+    }
+
+    .signin {
+        margin-block-start: var(--gap-md);
+        padding-inline: 0;
+    }
+
+    .signin .card-body {
+        padding: var(--gap-md);
+    }
 }
 
 /* --------------------------------------------------------------------------

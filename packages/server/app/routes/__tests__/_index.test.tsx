@@ -53,6 +53,9 @@ describe("Index route", () => {
         ).toBeInTheDocument();
 
         expect(screen.getByRole("button", { name: "Sign in" })).toBeInTheDocument();
+        expect(
+            screen.getByText(/New accounts are invite-only/),
+        ).toBeInTheDocument();
     });
 
     test("renders authenticated state", async () => {

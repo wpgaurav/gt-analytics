@@ -146,14 +146,20 @@ export default function App() {
                 </div>
             </nav>
 
-            <div className="container app-shell">
+            <div
+                className={`container app-shell${showSidebar ? "" : " app-shell--auth"}`}
+            >
                 {showSidebar && (
                     <Sidebar
                         presets={data?.presets ?? []}
                         siteId={data?.siteId ?? null}
                     />
                 )}
-                <main id="main" role="main" className="app-main">
+                <main
+                    id="main"
+                    role="main"
+                    className={`app-main${showSidebar ? "" : " app-main--auth"}`}
+                >
                     <Outlet />
                 </main>
             </div>

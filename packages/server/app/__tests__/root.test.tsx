@@ -87,6 +87,19 @@ describe("Root", () => {
         expect(screen.getByText("ABC123")).toBeInTheDocument();
     });
 
+    test("uses a single-column shell when signed out", async () => {
+        const RemixStub = createRoutesStub([
+            { path: "/", Component: Root, loader: stubLoader() },
+        ]);
+
+        render(<RemixStub />);
+        await waitFor(() => screen.getByText("ABC123"));
+
+        expect(document.querySelector(".app-shell")).toHaveClass("app-shell--auth");
+        expect(document.querySelector(".app-main")).toHaveClass("app-main--auth");
+        expect(document.querySelector(".sidebar")).not.toBeInTheDocument();
+    });
+
     test("renders a log out link when the user is authenticated", async () => {
         vi.mocked(auth.isAuthEnabled).mockReturnValue(true);
 

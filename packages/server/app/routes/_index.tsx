@@ -158,6 +158,9 @@ export default function Index() {
                             >
                                 {isSubmitting ? "Signing in…" : "Sign in"}
                             </button>
+                            <div className="signin__divider" aria-hidden="true">
+                                <span>or</span>
+                            </div>
                             <button
                                 type="button"
                                 className="btn btn-secondary btn-block"
@@ -167,6 +170,9 @@ export default function Index() {
                                 {passkeyBusy ? "Checking passkey…" : "Sign in with a passkey"}
                             </button>
                             {passkeyError && <p className="field-error" role="alert">{passkeyError}</p>}
+                            <p className="signin__invite">
+                                New accounts are invite-only. Ask the administrator for an invitation link.
+                            </p>
                         </Form>
                     )}
                 </div>
