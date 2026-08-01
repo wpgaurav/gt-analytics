@@ -13,12 +13,7 @@ describe("trackPageview", () => {
             makeRequestMock,
         );
 
-        // Mock the checkCacheStatus function to return a default response
-        vi.spyOn(requestModule, "checkCacheStatus").mockImplementation(() => {
-            return Promise.resolve({
-                ht: 1, // First hit (new visit)
-            });
-        });
+        vi.spyOn(requestModule, "nextHitType").mockReturnValue("1");
 
         // Reset mocks between tests
         makeRequestMock.mockReset();

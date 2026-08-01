@@ -1,5 +1,6 @@
 import { autoTrackPageviews } from "./track";
 import { trackEngagement } from "./engagement";
+import { trackPresence } from "./presence";
 import type { BaseClientConfig } from "../shared/types";
 
 export type ClientOpts = BaseClientConfig & {
@@ -13,6 +14,7 @@ export class Client {
 
     _cleanupAutoTrackPageviews?: () => void;
     _cleanupEngagement?: () => void;
+    _cleanupPresence?: () => void;
 
     constructor(opts: ClientOpts) {
         this.siteId = opts.siteId;
@@ -29,6 +31,7 @@ export class Client {
             setTimeout(() => {
                 this._cleanupAutoTrackPageviews = autoTrackPageviews(this);
                 this._cleanupEngagement = trackEngagement(this);
+                this._cleanupPresence = trackPresence(this);
             }, 0);
         }
     }
@@ -39,6 +42,9 @@ export class Client {
         }
         if (this._cleanupEngagement) {
             this._cleanupEngagement();
+        }
+        if (this._cleanupPresence) {
+            this._cleanupPresence();
         }
     }
 }

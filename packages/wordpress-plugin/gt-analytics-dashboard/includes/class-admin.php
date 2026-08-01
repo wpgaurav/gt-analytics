@@ -407,7 +407,7 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 
 			<div class="gtad-kpis">
 				<?php $this->render_metric( __( 'Active now', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'activeVisitors' ), 'is-live' ); ?>
-				<?php $this->render_metric( __( 'Views · 1 min', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'viewsLastMinute' ) ); ?>
+				<?php $this->render_metric( __( 'Views · this minute', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'viewsLastMinute' ) ); ?>
 				<?php $this->render_metric( __( 'Visitors', 'gt-analytics-dashboard' ), $this->integer_value( $summary, 'visitors' ) ); ?>
 				<?php $this->render_metric( __( 'Views', 'gt-analytics-dashboard' ), $this->integer_value( $summary, 'views' ) ); ?>
 				<?php $this->render_metric( __( 'Bounce rate', 'gt-analytics-dashboard' ), $this->format_percentage( isset( $summary['bounceRate'] ) ? $summary['bounceRate'] : null ) ); ?>
@@ -415,7 +415,7 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 			</div>
 
 			<?php $this->render_series( isset( $analytics['series'] ) && is_array( $analytics['series'] ) ? $analytics['series'] : array() ); ?>
-			<?php $this->render_top_paths( isset( $realtime['topPaths'] ) && is_array( $realtime['topPaths'] ) ? $realtime['topPaths'] : array(), $base_url ); ?>
+			<?php $this->render_top_paths( isset( $realtime['activePages'] ) && is_array( $realtime['activePages'] ) ? $realtime['activePages'] : array(), $base_url ); ?>
 
 			<div class="gtad-widget__footer">
 				<span aria-live="polite"><?php echo esc_html( $this->generated_label( $analytics, $realtime ) ); ?></span>
@@ -463,7 +463,7 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 
 			<div class="gtad-kpis gtad-kpis--page">
 				<?php $this->render_metric( __( 'Active now', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'activeVisitors' ), 'is-live' ); ?>
-				<?php $this->render_metric( __( 'Views · 1 min', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'viewsLastMinute' ) ); ?>
+				<?php $this->render_metric( __( 'Views · this minute', 'gt-analytics-dashboard' ), $this->integer_value( $realtime, 'viewsLastMinute' ) ); ?>
 				<?php $this->render_metric( sprintf( __( 'Visitors · %s', 'gt-analytics-dashboard' ), $range ), $this->integer_value( $summary, 'visitors' ) ); ?>
 				<?php $this->render_metric( sprintf( __( 'Views · %s', 'gt-analytics-dashboard' ), $range ), $this->integer_value( $summary, 'views' ) ); ?>
 				<?php $this->render_metric( __( 'Bounce rate', 'gt-analytics-dashboard' ), $this->format_percentage( isset( $summary['bounceRate'] ) ? $summary['bounceRate'] : null ) ); ?>
@@ -474,7 +474,8 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 
 			<div class="gtad-dashboard-grid">
 				<?php $this->render_pages_table( isset( $analytics['pages'] ) && is_array( $analytics['pages'] ) ? $analytics['pages'] : array(), $base_url ); ?>
-				<?php $this->render_tuple_card( __( 'Live pages', 'gt-analytics-dashboard' ), isset( $realtime['topPaths'] ) && is_array( $realtime['topPaths'] ) ? $realtime['topPaths'] : array(), 'path', $base_url ); ?>
+				<?php $this->render_tuple_card( __( 'Active pages now', 'gt-analytics-dashboard' ), isset( $realtime['activePages'] ) && is_array( $realtime['activePages'] ) ? $realtime['activePages'] : array(), 'path', $base_url ); ?>
+				<?php $this->render_tuple_card( __( 'Top pages · 30 min', 'gt-analytics-dashboard' ), isset( $realtime['topPaths'] ) && is_array( $realtime['topPaths'] ) ? $realtime['topPaths'] : array(), 'path', $base_url ); ?>
 				<?php $this->render_tuple_card( __( 'Live channels', 'gt-analytics-dashboard' ), isset( $realtime['topChannels'] ) && is_array( $realtime['topChannels'] ) ? $realtime['topChannels'] : array() ); ?>
 				<?php $this->render_tuple_card( __( 'Live referrers', 'gt-analytics-dashboard' ), isset( $realtime['topReferrers'] ) && is_array( $realtime['topReferrers'] ) ? $realtime['topReferrers'] : array(), 'referrerHost' ); ?>
 				<?php $this->render_tuple_card( __( 'Live countries', 'gt-analytics-dashboard' ), isset( $realtime['topCountries'] ) && is_array( $realtime['topCountries'] ) ? $realtime['topCountries'] : array() ); ?>

@@ -9,10 +9,9 @@
  * So the collector also fans each hit out to this Durable Object, which keeps
  * a small rolling window in memory and answers snapshots instantly.
  *
- * Nothing here is persisted to Durable Object storage. The whole window is
- * worthless after thirty minutes, and writing it would add cost and latency
- * for data with no archival value -- Analytics Engine is the system of record.
- * If the object is evicted, the window simply refills within seconds.
+ * The short window is checkpointed to Durable Object storage so routine idle
+ * eviction and deploys do not make current traffic disappear. Analytics
+ * Engine remains the historical system of record.
  *
  * NOTE ON LOCAL DEVELOPMENT: `pnpm dev` (react-router dev) cannot run this.
  * Its cloudflareDevProxy proxies bindings via getPlatformProxy but does not
@@ -27,8 +26,8 @@
 /** Buckets kept for the activity sparkline. */
 const WINDOW_MINUTES = 30;
 
-/** How far back someone counts as "active". */
-const ACTIVE_MINUTES = 5;
+/** Heartbeats arrive every 30 seconds; tolerate three missed beats. */
+const ACTIVE_TIMEOUT_MS = 2 * 60_000;
 
 /** Entries in the live feed. */
 const FEED_LIMIT = 50;
@@ -62,6 +61,7 @@ interface StoredWindow {
         minute: number;
         views: number;
         conversions: number;
+        events?: number;
         visitors: string[];
         paths: [string, number][];
         channels: [string, number][];
@@ -69,12 +69,14 @@ interface StoredWindow {
         referrers: [string, number][];
     }[];
     feed: RealtimeSnapshot["feed"];
+    presence?: [string, Presence][];
 }
 
 interface MinuteBucket {
     minute: number;
     views: number;
     conversions: number;
+    events: number;
     visitors: Set<string>;
     paths: Map<string, number>;
     channels: Map<string, number>;
@@ -82,15 +84,24 @@ interface MinuteBucket {
     referrers: Map<string, number>;
 }
 
+interface Presence {
+    seenAt: number;
+    path?: string;
+    country?: string;
+}
+
 export interface RealtimeSnapshot {
-    /** Distinct visitors seen in the last ACTIVE_MINUTES. */
+    /** Distinct visible visitors inside the heartbeat tolerance window. */
     activeVisitors: number;
     viewsLastMinute: number;
     viewsInWindow: number;
     conversionsInWindow: number;
+    eventsInWindow: number;
     /** Oldest-first, one entry per minute, for the sparkline. */
     perMinute: { minute: number; views: number; visitors: number }[];
     topPaths: [string, number][];
+    /** Distinct visible visitors by their latest page. */
+    activePages: [string, number][];
     topChannels: [string, number][];
     topReferrers: [string, number][];
     topCountries: [string, number][];
@@ -110,6 +121,7 @@ export interface RealtimeSnapshot {
 export class RealtimeSite {
     private buckets = new Map<number, MinuteBucket>();
     private feed: RealtimeSnapshot["feed"] = [];
+    private presence = new Map<string, Presence>();
     private state: DurableObjectState;
     private lastSave = 0;
     private ready: Promise<void>;
@@ -153,12 +165,31 @@ export class RealtimeSite {
         const minute = Math.floor(now / 60_000);
         this.prune(minute);
 
+        const kind = hit.kind || "pageview";
+        const isPageview = kind === "pageview";
+        const isPresence = kind === "presence";
+        const isConversion = kind === "conversion";
+        const isEvent = kind === "event";
+
+        // Presence is exact latest state, not another view. Pageviews seed it
+        // immediately; visible-tab heartbeats keep it fresh during long reads.
+        if (hit.visitor && (isPageview || isPresence)) {
+            this.presence.set(hit.visitor, {
+                seenAt: now,
+                path: hit.path,
+                country: hit.country,
+            });
+        }
+
+        if (isPresence) return;
+
         let bucket = this.buckets.get(minute);
         if (!bucket) {
             bucket = {
                 minute,
                 views: 0,
                 conversions: 0,
+                events: 0,
                 visitors: new Set(),
                 paths: new Map(),
                 channels: new Map(),
@@ -168,21 +199,30 @@ export class RealtimeSite {
             this.buckets.set(minute, bucket);
         }
 
-        const isConversion = hit.kind === "conversion";
-
         if (isConversion) {
             bucket.conversions += 1;
-        } else {
+        } else if (isEvent) {
+            bucket.events += 1;
+        } else if (isPageview) {
             bucket.views += 1;
             if (hit.path) bump(bucket.paths, hit.path);
         }
 
-        if (hit.visitor && bucket.visitors.size < VISITORS_PER_MINUTE_CAP) {
+        if (
+            isPageview &&
+            hit.visitor &&
+            bucket.visitors.size < VISITORS_PER_MINUTE_CAP
+        ) {
             bucket.visitors.add(hit.visitor);
         }
-        if (hit.channel) bump(bucket.channels, hit.channel);
-        if (hit.country) bump(bucket.countries, hit.country);
-        if (hit.referrerHost) bump(bucket.referrers, hit.referrerHost);
+        // Traffic breakdowns describe pageviews, not conversions or custom
+        // events. Mixing duration events into these maps inflated every live
+        // total and made the top-page table disagree with historical reports.
+        if (isPageview) {
+            if (hit.channel) bump(bucket.channels, hit.channel);
+            if (hit.country) bump(bucket.countries, hit.country);
+            if (hit.referrerHost) bump(bucket.referrers, hit.referrerHost);
+        }
 
         this.feed.unshift({
             t: now,
@@ -249,6 +289,7 @@ export class RealtimeSite {
                     minute: bucket.minute,
                     views: bucket.views,
                     conversions: bucket.conversions,
+                    events: bucket.events,
                     // Sets and Maps do not survive structured storage in a
                     // form that round-trips, so they go as arrays.
                     visitors: [...bucket.visitors],
@@ -258,6 +299,7 @@ export class RealtimeSite {
                     referrers: [...bucket.referrers],
                 })),
                 feed: this.feed,
+                presence: [...this.presence],
             });
         } catch (error) {
             // Real-time is a convenience view. A storage failure must not turn
@@ -276,6 +318,7 @@ export class RealtimeSite {
                     minute: bucket.minute,
                     views: bucket.views,
                     conversions: bucket.conversions,
+                    events: bucket.events ?? 0,
                     visitors: new Set(bucket.visitors),
                     paths: new Map(bucket.paths),
                     channels: new Map(bucket.channels),
@@ -284,6 +327,7 @@ export class RealtimeSite {
                 });
             }
             this.feed = saved.feed ?? [];
+            this.presence = new Map(saved.presence ?? []);
 
             // The object may have been evicted for longer than the window is
             // wide, in which case everything restored is already expired.
@@ -298,6 +342,11 @@ export class RealtimeSite {
         for (const minute of this.buckets.keys()) {
             if (minute < oldest) this.buckets.delete(minute);
         }
+
+        const activeCutoff = Date.now() - ACTIVE_TIMEOUT_MS;
+        for (const [visitor, current] of this.presence) {
+            if (current.seenAt < activeCutoff) this.presence.delete(visitor);
+        }
     }
 
     private snapshot(): RealtimeSnapshot {
@@ -305,30 +354,28 @@ export class RealtimeSite {
         const currentMinute = Math.floor(now / 60_000);
         this.prune(currentMinute);
 
-        const activeFrom = currentMinute - ACTIVE_MINUTES + 1;
-        const activeVisitors = new Set<string>();
-
         const paths = new Map<string, number>();
+        const activePages = new Map<string, number>();
         const channels = new Map<string, number>();
         const countries = new Map<string, number>();
         const referrers = new Map<string, number>();
 
         let viewsInWindow = 0;
         let conversionsInWindow = 0;
+        let eventsInWindow = 0;
 
         for (const bucket of this.buckets.values()) {
             viewsInWindow += bucket.views;
             conversionsInWindow += bucket.conversions;
+            eventsInWindow += bucket.events;
             merge(paths, bucket.paths);
             merge(channels, bucket.channels);
             merge(countries, bucket.countries);
             merge(referrers, bucket.referrers);
+        }
 
-            if (bucket.minute >= activeFrom) {
-                for (const visitor of bucket.visitors) {
-                    activeVisitors.add(visitor);
-                }
-            }
+        for (const current of this.presence.values()) {
+            if (current.path) bump(activePages, current.path);
         }
 
         // Emit every minute in the window, including empty ones, so the
@@ -348,12 +395,14 @@ export class RealtimeSite {
         }
 
         return {
-            activeVisitors: activeVisitors.size,
+            activeVisitors: this.presence.size,
             viewsLastMinute: this.buckets.get(currentMinute)?.views ?? 0,
             viewsInWindow,
             conversionsInWindow,
+            eventsInWindow,
             perMinute,
             topPaths: top(paths),
+            activePages: top(activePages),
             topChannels: top(channels),
             topReferrers: top(referrers),
             topCountries: top(countries),

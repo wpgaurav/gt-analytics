@@ -10,7 +10,7 @@ test("tracks outbound requests", async ({ page }) => {
     const request = await collectRequestPromise;
     expect(request).toBeTruthy();
     const url = request.url();
-    expect(request.method()).toBe("GET");
+    expect(request.method()).toBe("POST");
     const params = new URLSearchParams(url.split("?")[1]);
     expect(params.get("sid")).toBe("your-unique-site-id");
     expect(params.get("h")).toBe("http://localhost"); // drops port

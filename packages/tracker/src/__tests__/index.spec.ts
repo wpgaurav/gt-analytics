@@ -4,53 +4,21 @@ import * as Counterscale from "../index";
 import * as requestModule from "../lib/request";
 import { Client } from "~/lib/client";
 
-// Define a type for our mock XHR objects
-interface MockXHR {
-    open: ReturnType<typeof vi.fn>;
-    send: ReturnType<typeof vi.fn>;
-    setRequestHeader: ReturnType<typeof vi.fn>;
-    addEventListener: ReturnType<typeof vi.fn>;
-    responseText: string;
-    status: number;
-    statusText: string;
-}
-
 describe("api", () => {
-    let mockXhrObjects: MockXHR[] = [];
+    let beaconUrls: string[] = [];
     beforeAll(() => {
-        class XMLHttpRequestMock {
-            open: ReturnType<typeof vi.fn>;
-            send: ReturnType<typeof vi.fn>;
-            setRequestHeader: ReturnType<typeof vi.fn>;
-            addEventListener: ReturnType<typeof vi.fn>;
-            responseText: string;
-            status: number;
-            statusText: string;
-
-            constructor() {
-                this.open = vi.fn();
-                this.send = vi.fn();
-                this.setRequestHeader = vi.fn();
-                this.addEventListener = vi.fn();
-                this.responseText = "";
-                this.status = 200;
-                this.statusText = "OK";
-                mockXhrObjects.push(this);
-            }
-        }
-
-        vi.stubGlobal("XMLHttpRequest", XMLHttpRequestMock);
-
-        // Mock the checkCacheStatus function to return a default response
-        vi.spyOn(requestModule, "checkCacheStatus").mockImplementation(() => {
-            return Promise.resolve({
-                ht: 1, // First hit (new visit)
-            });
+        vi.spyOn(requestModule, "nextHitType").mockReturnValue("1");
+        Object.defineProperty(navigator, "sendBeacon", {
+            configurable: true,
+            value: vi.fn((url: string) => {
+                beaconUrls.push(String(url));
+                return true;
+            }),
         });
     });
 
     afterEach(() => {
-        mockXhrObjects = [];
+        beaconUrls = [];
         Counterscale.cleanup();
     });
 
@@ -118,17 +86,13 @@ describe("api", () => {
             });
 
             // since auto: false, no requests should be made yet
-            expect(mockXhrObjects).toHaveLength(0);
+            expect(beaconUrls).toHaveLength(0);
 
             await Counterscale.trackPageview();
 
-            expect(mockXhrObjects).toHaveLength(1);
+            expect(beaconUrls).toHaveLength(1);
 
-            const openArgs = mockXhrObjects[0].open.mock.calls[0];
-            expect(openArgs[0]).toBe("GET");
-
-            const queryString = openArgs[1];
-            const searchParams = new URL(queryString).searchParams;
+            const searchParams = new URL(beaconUrls[0]).searchParams;
             expect(searchParams.get("sid")).toBe("test-id");
             expect(searchParams.get("h")).toBe("http://localhost");
             expect(searchParams.get("p")).toBe("/"); // default path when running test w/ jsdom
@@ -145,20 +109,16 @@ describe("api", () => {
             });
 
             // since auto: false, no requests should be made yet
-            expect(mockXhrObjects).toHaveLength(0);
+            expect(beaconUrls).toHaveLength(0);
 
             await Counterscale.trackPageview({
                 url: "https://example.com/foo",
                 referrer: "https://referrer.com/",
             });
 
-            expect(mockXhrObjects).toHaveLength(1);
+            expect(beaconUrls).toHaveLength(1);
 
-            const openArgs = mockXhrObjects[0].open.mock.calls[0];
-            expect(openArgs[0]).toBe("GET");
-
-            const queryString = openArgs[1];
-            const searchParams = new URL(queryString).searchParams;
+            const searchParams = new URL(beaconUrls[0]).searchParams;
             expect(searchParams.get("sid")).toBe("test-id");
             expect(searchParams.get("h")).toBe("https://example.com");
             expect(searchParams.get("p")).toBe("/foo");
@@ -181,7 +141,7 @@ describe("api", () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             // Check that at least one XHR request was made (initial pageview)
-            expect(mockXhrObjects.length).toBeGreaterThan(0);
+            expect(beaconUrls.length).toBeGreaterThan(0);
 
             // Trigger a navigation event
             window.dispatchEvent(new Event("popstate"));
@@ -190,7 +150,7 @@ describe("api", () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             // Check that another XHR request was made (after navigation)
-            const initialCount = mockXhrObjects.length;
+            const initialCount = beaconUrls.length;
             expect(initialCount).toBeGreaterThan(1);
 
             // Trigger another navigation event
@@ -201,7 +161,7 @@ describe("api", () => {
             await new Promise((resolve) => setTimeout(resolve, 50));
 
             // Check that a third XHR request was made
-            expect(mockXhrObjects.length).toBeGreaterThan(initialCount);
+            expect(beaconUrls.length).toBeGreaterThan(initialCount);
         });
     });
 
@@ -214,14 +174,14 @@ describe("api", () => {
             });
 
             // since auto: false, no requests should be made yet
-            expect(mockXhrObjects).toHaveLength(0);
+            expect(beaconUrls).toHaveLength(0);
 
             await Counterscale.trackPageview({
                 url: "https://example.com/foo",
                 referrer: "https://referrer.com/",
             });
 
-            expect(mockXhrObjects).toHaveLength(0);
+            expect(beaconUrls).toHaveLength(0);
         });
 
         test("should report on localhost when reportOnLocalhost is set to true", async () => {
@@ -233,14 +193,14 @@ describe("api", () => {
             });
 
             // since auto: false, no requests should be made yet
-            expect(mockXhrObjects).toHaveLength(0);
+            expect(beaconUrls).toHaveLength(0);
 
             await Counterscale.trackPageview({
                 url: "https://example.com/foo",
                 referrer: "https://referrer.com/",
             });
 
-            expect(mockXhrObjects).toHaveLength(1);
+            expect(beaconUrls).toHaveLength(1);
         });
     });
 });

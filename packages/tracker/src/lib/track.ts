@@ -1,6 +1,6 @@
 import type { Client } from "./client";
 import { instrumentHistoryBuiltIns } from "./instrument";
-import { makeRequest, checkCacheStatus } from "./request";
+import { makeRequest, nextHitType } from "./request";
 import {
     getHostnameAndPath,
     getReferrer,
@@ -27,19 +27,6 @@ export function autoTrackPageviews(client: Client) {
     void trackPageview(client);
 
     return cleanupFn;
-}
-
-function getCanonicalUrl() {
-    const canonical = document.querySelector(
-        'link[rel="canonical"][href]',
-    ) as HTMLLinkElement;
-    if (!canonical) {
-        return null;
-    }
-
-    const a = document.createElement("a");
-    a.href = canonical.href;
-    return a;
 }
 
 function getBrowserReferrer(hostname: string, referrer: string): string {
@@ -77,8 +64,10 @@ export async function trackPageview(
     client: Client,
     opts: TrackPageviewOpts = {},
 ) {
-    const canonical = getCanonicalUrl();
-    const location = canonical ?? window.location;
+    // Report the page the visitor actually opened. Canonical URLs are search
+    // indexing hints and may point elsewhere for pagination, previews or SPA
+    // routes, which made real pageviews appear under a different live path.
+    const location = window.location;
 
     if (
         !client.reportOnLocalhost &&
@@ -111,17 +100,10 @@ export async function trackPageview(
         opts.url || window.location.search,
     );
 
-    let hitType: string | undefined;
-    try {
-        const cacheStatus = await checkCacheStatus(
-            client.reporterUrl,
-            client.siteId,
-        );
-        hitType = cacheStatus.ht.toString();
-    } catch {
-        // If cache check fails, we proceed without hit count data
-        // The collect endpoint will handle the missing parameters
-    }
+    // Synchronous state means the pageview can be queued immediately. The old
+    // /cache round trip delayed /collect by up to a second, long enough for a
+    // fast navigation or mobile tab suspension to cancel the visit entirely.
+    const hitType = nextHitType(client.siteId);
 
     // First-touch attribution for the session, so pageviews after the landing
     // page stay credited to wherever the visit actually came from.

@@ -47,7 +47,9 @@ interface Snapshot {
     viewsLastMinute: number;
     viewsInWindow: number;
     conversionsInWindow: number;
+    eventsInWindow: number;
     perMinute: { minute: number; views: number; visitors: number }[];
+    activePages: [string, number][];
     topPaths: [string, number][];
     topChannels: [string, number][];
     topReferrers: [string, number][];
@@ -112,8 +114,8 @@ export default function Realtime() {
                         Real-time
                     </h1>
                     <p>
-                        Everyone on the site in the last five minutes, updated
-                        every two seconds.
+                        Visible readers and incoming activity, updated every
+                        two seconds.
                     </p>
                 </div>
                 <div className="app-actions">
@@ -149,7 +151,7 @@ export default function Realtime() {
                             primary
                             value={snapshot?.activeVisitors}
                             label="Active now"
-                            hint="Distinct people in the last 5 minutes"
+                            hint="Visible in the last 2 minutes"
                         />
                         <Kpi
                             icon="eye"
@@ -166,6 +168,11 @@ export default function Realtime() {
                             value={snapshot?.conversionsInWindow}
                             label="Conversions (30 min)"
                         />
+                        <Kpi
+                            icon="signal-stream"
+                            value={snapshot?.eventsInWindow}
+                            label="Events (30 min)"
+                        />
                     </div>
 
                     <section className="card">
@@ -179,31 +186,38 @@ export default function Realtime() {
 
                     <div className="grid-cards grid-cards--2">
                         <TopCard
-                            title="Pages"
+                            title="Active pages now"
+                            icon="users"
+                            rows={snapshot?.activePages ?? []}
+                            linkBase={baseUrl}
+                        />
+                        <TopCard
+                            title="Top pages (30 min)"
                             icon="file-lines"
                             rows={snapshot?.topPaths ?? []}
                             linkBase={baseUrl}
                         />
+                    </div>
+
+                    <div className="grid-cards grid-cards--2">
                         <TopCard
                             title="Channels"
                             icon="share-nodes"
                             rows={snapshot?.topChannels ?? []}
                             withChannelIcon
                         />
-                    </div>
-
-                    <div className="grid-cards grid-cards--2">
                         <TopCard
                             title="Referrers"
                             icon="link"
                             rows={snapshot?.topReferrers ?? []}
                         />
-                        <TopCard
-                            title="Countries"
-                            icon="globe"
-                            rows={snapshot?.topCountries ?? []}
-                        />
                     </div>
+
+                    <TopCard
+                        title="Countries"
+                        icon="globe"
+                        rows={snapshot?.topCountries ?? []}
+                    />
 
                     <LiveFeed
                         feed={snapshot?.feed ?? []}

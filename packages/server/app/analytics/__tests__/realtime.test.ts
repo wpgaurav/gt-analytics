@@ -78,8 +78,8 @@ describe("RealtimeSite", () => {
         const site = makeSite();
         await hit(site, { siteId: "s", visitor: "old", path: "/x/" });
 
-        // Six minutes later: past the five-minute active window.
-        vi.setSystemTime(new Date("2026-07-31T12:06:30Z"));
+        // Three minutes later: past the heartbeat tolerance window.
+        vi.setSystemTime(new Date("2026-07-31T12:03:30Z"));
         await hit(site, { siteId: "s", visitor: "new", path: "/y/" });
 
         const snap = (await snapshot(site)) as Record<string, number>;
@@ -128,6 +128,49 @@ describe("RealtimeSite", () => {
         const snap = (await snapshot(site)) as Record<string, number>;
         expect(snap.viewsInWindow).toBe(1);
         expect(snap.conversionsInWindow).toBe(1);
+    });
+
+    test("does not count custom events as pageviews", async () => {
+        const site = makeSite();
+        await hit(site, { siteId: "s", visitor: "a", path: "/p/" });
+        await hit(site, {
+            siteId: "s",
+            visitor: "a",
+            path: "/p/",
+            kind: "event",
+            name: "download",
+        });
+
+        const snap = (await snapshot(site)) as {
+            viewsInWindow: number;
+            eventsInWindow: number;
+            topPaths: [string, number][];
+        };
+        expect(snap.viewsInWindow).toBe(1);
+        expect(snap.eventsInWindow).toBe(1);
+        expect(snap.topPaths).toEqual([["/p/", 1]]);
+    });
+
+    test("presence keeps a reader active without adding a view", async () => {
+        const site = makeSite();
+        await hit(site, { siteId: "s", visitor: "a", path: "/old/" });
+
+        vi.setSystemTime(new Date("2026-07-31T12:01:45Z"));
+        await hit(site, {
+            siteId: "s",
+            visitor: "a",
+            path: "/reading/",
+            kind: "presence",
+        });
+
+        const snap = (await snapshot(site)) as {
+            activeVisitors: number;
+            viewsInWindow: number;
+            activePages: [string, number][];
+        };
+        expect(snap.activeVisitors).toBe(1);
+        expect(snap.viewsInWindow).toBe(1);
+        expect(snap.activePages).toEqual([["/reading/", 1]]);
     });
 
     test("keeps the newest entries first in the feed", async () => {

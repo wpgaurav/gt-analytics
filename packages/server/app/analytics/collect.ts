@@ -6,6 +6,7 @@ import {
 } from "./referrer";
 import { pushRealtimeHit, visitorKey } from "./realtime-client";
 import { IDevice, UAParser } from "ua-parser-js";
+import { isbot } from "isbot";
 import { maskBrowserVersion } from "~/lib/utils";
 
 // Cookieless visitor/session tracking
@@ -139,7 +140,7 @@ function getDeviceTypeFromDevice(device: IDevice): string {
 export function collectRequestHandler(
     request: Request,
     env: Env,
-    extra: Record<string, string> = {}, // extra request properties (i.e. Cloudflare properties)
+    extra: Record<string, unknown> = {}, // extra request properties (i.e. Cloudflare properties)
     // Passed so the real-time fan-out can run after the response is sent.
     // Without it the pixel would wait on a Durable Object round trip.
     ctx?: { waitUntil: (promise: Promise<unknown>) => void },
@@ -152,6 +153,17 @@ export function collectRequestHandler(
     }
 
     const userAgent = request.headers.get("user-agent") || undefined;
+
+    // Other analytics products exclude known crawlers. This collector did not,
+    // even though Googlebot, Applebot and Baidu execute JavaScript; live data
+    // showed those requests as visitors and pageviews. A successful pixel keeps
+    // the tracker unobtrusive while omitting automated traffic from both stores.
+    const botManagement = extra?.botManagement as
+        | { verifiedBot?: boolean }
+        | undefined;
+    if (isbot(userAgent || "") || botManagement?.verifiedBot) {
+        return transparentPixelResponse();
+    }
 
     const parsedUserAgent = new UAParser(userAgent);
 
@@ -273,6 +285,11 @@ export function collectRequestHandler(
         );
     }
 
+    return transparentPixelResponse(nextLastModifiedDate);
+}
+
+/** A successful tracking pixel, shared by recorded and ignored requests. */
+function transparentPixelResponse(nextLastModifiedDate?: Date) {
     // encode 1x1 transparent gif
     const gif = "R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7";
     const gifData = atob(gif);

@@ -14,7 +14,7 @@ test("tracks UTM parameters when present in URL", async ({ page }) => {
     expect(request).toBeTruthy();
 
     const url = request.url();
-    expect(request.method()).toBe("GET");
+    expect(request.method()).toBe("POST");
 
     const params = new URLSearchParams(url.split("?")[1]);
 

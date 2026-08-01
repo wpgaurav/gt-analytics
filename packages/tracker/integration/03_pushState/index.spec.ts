@@ -30,7 +30,7 @@ test("tracks pushState and popState events as pageviews", async ({ page }) => {
 
     let request = collectRequests[0];
     expect(request).toBeTruthy();
-    expect(request.method()).toBe("GET");
+    expect(request.method()).toBe("POST");
     let params = new URLSearchParams(request.url().split("?")[1]);
     expect(params.get("sid")).toBe("your-unique-site-id");
     expect(params.get("h")).toBe("http://localhost"); // drops port
@@ -49,7 +49,7 @@ test("tracks pushState and popState events as pageviews", async ({ page }) => {
     expect(collectRequests).toHaveLength(2);
     request = collectRequests[1];
     expect(request).toBeTruthy();
-    expect(request.method()).toBe("GET");
+    expect(request.method()).toBe("POST");
     params = new URLSearchParams(request.url().split("?")[1]);
     expect(params.get("sid")).toBe("your-unique-site-id");
     expect(params.get("h")).toBe("http://localhost"); // drops port
@@ -70,7 +70,7 @@ test("tracks pushState and popState events as pageviews", async ({ page }) => {
     expect(collectRequests).toHaveLength(3);
     request = collectRequests[2];
     expect(request).toBeTruthy();
-    expect(request.method()).toBe("GET");
+    expect(request.method()).toBe("POST");
     params = new URLSearchParams(request.url().split("?")[1]);
     expect(params.get("sid")).toBe("your-unique-site-id");
     expect(params.get("h")).toBe("http://localhost"); // drops port

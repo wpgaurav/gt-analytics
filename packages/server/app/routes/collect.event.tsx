@@ -6,6 +6,7 @@ import {
     pushRealtimeHit,
     visitorKey,
 } from "~/analytics/realtime-client";
+import { isbot } from "isbot";
 
 /**
  * /collect/event -- custom events and conversions.
@@ -19,6 +20,13 @@ async function collectEvent(
     request: Request,
     context: LoaderFunctionArgs["context"],
 ) {
+    if (isbot(request.headers.get("user-agent") || "")) {
+        return new Response(null, {
+            status: 204,
+            headers: { "Access-Control-Allow-Origin": "*" },
+        });
+    }
+
     const params = extractParamsFromQueryString(request.url);
     const cf = context.cloudflare.cf as Record<string, unknown> | undefined;
 
@@ -38,7 +46,11 @@ async function collectEvent(
 
     // Conversions show up in the live feed too -- seeing one land is the whole
     // appeal of a real-time view.
-    if (context.cloudflare.ctx && env.REALTIME) {
+    if (
+        result.name !== "duration" &&
+        context.cloudflare.ctx &&
+        env.REALTIME
+    ) {
         context.cloudflare.ctx.waitUntil(
             visitorKey(
                 result.siteId,

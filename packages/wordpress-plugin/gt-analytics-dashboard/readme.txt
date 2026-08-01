@@ -4,7 +4,7 @@ Tags: analytics, dashboard, realtime, privacy
 Requires at least: 6.5
 Tested up to: 6.8
 Requires PHP: 7.4
-Stable tag: 1.2.1
+Stable tag: 1.2.2
 License: MIT
 License URI: https://opensource.org/license/mit/
 
@@ -33,6 +33,9 @@ This plugin connects to the GT Analytics installation URL configured by the site
 GT Analytics is self-hostable software. Its source, documentation, privacy notes, and license are available at https://github.com/wpgaurav/gt-analytics. Data handling is governed by the operator of the configured GT Analytics installation.
 
 == Changelog ==
+
+= 1.2.2 =
+* Added active pages now and corrected real-time pageview labels.
 
 = 1.2.1 =
 * Show visitor and view counts only in hover and keyboard-focus tooltips.

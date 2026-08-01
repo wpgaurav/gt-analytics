@@ -94,6 +94,23 @@ describe("collectRequestHandler", () => {
         expect(env.WEB_COUNTER_AE.writeDataPoint).not.toHaveBeenCalled();
     });
 
+    test("acknowledges known bots without recording them", () => {
+        const env = {
+            WEB_COUNTER_AE: {
+                writeDataPoint: vi.fn(),
+            } as AnalyticsEngineDataset,
+        } as Env;
+        const request = generateRequestParams({
+            "user-agent":
+                "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
+        });
+
+        const response = collectRequestHandler(request as any, env);
+
+        expect(response.status).toBe(200);
+        expect(env.WEB_COUNTER_AE.writeDataPoint).not.toHaveBeenCalled();
+    });
+
     beforeEach(() => {
         // default time is just middle of the day
         vi.setSystemTime(new Date("2024-01-18T09:33:02").getTime());
