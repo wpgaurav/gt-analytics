@@ -1,4 +1,4 @@
-import { LoaderFunctionArgs } from "react-router";
+import { ActionFunctionArgs, LoaderFunctionArgs } from "react-router";
 
 import { buildEventDataPoint, writeEventDataPoint } from "~/analytics/events";
 import { extractParamsFromQueryString } from "~/analytics/collect";
@@ -10,12 +10,15 @@ import {
 /**
  * /collect/event -- custom events and conversions.
  *
- * A GET with query parameters rather than a JSON POST, for the same reason the
- * pageview collector is: `navigator.sendBeacon` and an image request both
- * survive the page being unloaded, which is exactly when a conversion on a
- * form submit or an outbound click fires.
+ * Parameters live in the query string for both supported transports:
+ * `navigator.sendBeacon` sends a POST, while the image fallback sends a GET.
+ * Both survive page teardown, which is exactly when duration and conversion
+ * events usually fire.
  */
-export async function loader({ request, context }: LoaderFunctionArgs) {
+async function collectEvent(
+    request: Request,
+    context: LoaderFunctionArgs["context"],
+) {
     const params = extractParamsFromQueryString(request.url);
     const cf = context.cloudflare.cf as Record<string, unknown> | undefined;
 
@@ -70,4 +73,14 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
             Tk: "N", // not tracking
         },
     });
+}
+
+/** Image fallback transport. */
+export async function loader({ request, context }: LoaderFunctionArgs) {
+    return collectEvent(request, context);
+}
+
+/** `navigator.sendBeacon` transport. */
+export async function action({ request, context }: ActionFunctionArgs) {
+    return collectEvent(request, context);
 }

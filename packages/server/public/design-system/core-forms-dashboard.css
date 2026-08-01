@@ -152,31 +152,6 @@
     }
 }
 
-/* Below the shell breakpoint the sidebar becomes a horizontal strip. A drawer
-   would need JS state and a focus trap to be done properly; a scrolling strip
-   costs nothing and never traps anyone. */
-@media (max-width: 959px) {
-    .sidebar {
-        flex-direction: row;
-        gap: var(--gap-md);
-        overflow-x: auto;
-        padding-block: var(--gap-md) 0;
-        border-block-end: 1px solid var(--ink-100);
-    }
-
-    .sidebar__group {
-        flex: none;
-        flex-direction: row;
-        align-items: center;
-        gap: var(--gap-xs);
-    }
-
-    .sidebar__label,
-    .sidebar__empty {
-        display: none;
-    }
-}
-
 .sidebar__group {
     display: flex;
     flex-direction: column;
@@ -312,6 +287,44 @@
 .sidebar__save-actions {
     display: flex;
     gap: var(--gap-xs);
+}
+
+/* Below the shell breakpoint the sidebar becomes one compact, horizontally
+   scrollable row. Keep this after the base group rules: placing it before
+   `.sidebar__group` let the base column direction win in the cascade, which
+   turned the mobile navigation into three tall columns. */
+@media (max-width: 959px) {
+    .sidebar {
+        flex-direction: row;
+        gap: var(--gap-md);
+        overflow-x: auto;
+        overscroll-behavior-inline: contain;
+        scrollbar-width: thin;
+        padding-block: var(--gap-sm);
+        border-block-end: 1px solid var(--ink-100);
+    }
+
+    .sidebar__group {
+        flex: none;
+        flex-direction: row;
+        align-items: center;
+        gap: var(--gap-xs);
+    }
+
+    .sidebar__label,
+    .sidebar__empty {
+        display: none;
+    }
+
+    .sidebar__preset,
+    .sidebar__preset .sidebar__link,
+    .sidebar__add {
+        flex: none;
+    }
+
+    .sidebar__add {
+        margin-block-start: 0;
+    }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1205,6 +1218,33 @@
     min-width: 150px;
 }
 
+@media (max-width: 560px) {
+    .app-main {
+        padding-block-start: var(--gap-md);
+    }
+
+    .toolbar {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    }
+
+    .toolbar > .select,
+    .toolbar .range-picker,
+    .toolbar .range-picker .select {
+        width: 100%;
+        min-width: 0;
+    }
+
+    .toolbar .filter-badges {
+        grid-column: 1 / -1;
+    }
+
+    .card-head,
+    .card-body {
+        padding-inline: var(--gap-md);
+    }
+}
+
 /* CFDS has no disabled button state. */
 .btn[disabled],
 .btn[aria-disabled="true"] {
@@ -1400,6 +1440,26 @@
 
 .kpi__delta--up { color: #047857; }
 .kpi__delta--down { color: var(--danger-500); }
+
+@media (max-width: 560px) {
+    .kpis {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .kpis > .kpi:last-child:nth-child(odd) {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 350px) {
+    .kpis {
+        grid-template-columns: 1fr;
+    }
+
+    .kpis > .kpi:last-child:nth-child(odd) {
+        grid-column: auto;
+    }
+}
 
 /* --------------------------------------------------------------------------
    Utilities. Kept to the few that earn their place; anything reused more than
