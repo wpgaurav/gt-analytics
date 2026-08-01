@@ -4,8 +4,8 @@ import { requireAuth } from "~/lib/auth";
 import { listSites, type Site } from "~/sites/sites";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
-    return { sites: await listSites(context.cloudflare.env.SITES_DB) };
+    const user = await requireAuth(request, context.cloudflare.env);
+    return { sites: await listSites(context.cloudflare.env.SITES_DB, user.accountId!) };
 }
 
 export default function AdminSites() {

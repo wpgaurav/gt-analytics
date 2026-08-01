@@ -67,7 +67,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     let presets: Awaited<ReturnType<typeof listPresets>> = [];
     if (user.authenticated) {
         try {
-            presets = await listPresets(context.cloudflare.env.SITES_DB);
+            presets = await listPresets(
+                context.cloudflare.env.SITES_DB,
+                user.accountId!,
+            );
         } catch (error) {
             // A missing presets table must not take every page down.
             console.error("could not load presets", error);

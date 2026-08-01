@@ -293,6 +293,7 @@ describe("action function", () => {
 
         expect(loginSpy).toHaveBeenCalledWith(
             mockRequest,
+            "owner",
             "correct-password",
             mockContext.cloudflare.env,
         );
@@ -331,10 +332,11 @@ describe("action function", () => {
 
         expect(loginSpy).toHaveBeenCalledWith(
             mockRequest,
+            "owner",
             "wrong-password",
             mockContext.cloudflare.env,
         );
-        expect(result).toEqual({ error: "Invalid password" });
+        expect(result).toEqual({ error: "Invalid username or password" });
     });
 
     test("should handle login rejection gracefully", async () => {
@@ -369,9 +371,10 @@ describe("action function", () => {
 
         expect(loginSpy).toHaveBeenCalledWith(
             mockRequest,
+            "owner",
             "any-password",
             mockContext.cloudflare.env,
         );
-        expect(result).toEqual({ error: "Invalid password" });
+        expect(result).toEqual({ error: "Invalid username or password" });
     });
 });

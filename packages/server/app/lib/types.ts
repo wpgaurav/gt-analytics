@@ -17,4 +17,11 @@ export interface SearchFilters {
 
 export interface User {
     authenticated: boolean;
+    userId?: string;
+    accountId?: string;
+    username?: string;
+    displayName?: string;
+    accountName?: string;
+    role?: string;
+    isSystemAdmin?: boolean;
 }

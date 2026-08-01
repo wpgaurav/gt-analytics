@@ -1,40 +1,27 @@
-import { describe, test, expect } from "vitest";
-import { createJWTCookie, clearJWTCookie } from "../session";
+import { describe, expect, test } from "vitest";
+import { clearSessionCookie, createSessionCookie, readCookie, SESSION_COOKIE_NAME } from "../session";
 
-describe("session", () => {
-  describe("createJWTCookie", () => {
-    test("should create JWT cookie with correct format", () => {
-      const token = "test-jwt-token";
-      const result = createJWTCookie(token);
-
-      expect(result).toBe("__counterscale_token=test-jwt-token; HttpOnly; Max-Age=2592000; Path=/; SameSite=Lax");
+describe("session cookies", () => {
+    test("creates an opaque HttpOnly cookie with secure production defaults", () => {
+        expect(createSessionCookie("gts_secret", new Request("https://stats.example.com"))).toBe(
+            `${SESSION_COOKIE_NAME}=gts_secret; HttpOnly; Max-Age=2592000; Path=/; SameSite=Lax; Secure`,
+        );
     });
 
-    test("should include Secure flag in production", () => {
-      // We'll test this by mocking the module instead of trying to modify import.meta.env
-      // For now, let's just test the basic functionality
-      const token = "test-jwt-token";
-      const result = createJWTCookie(token);
-
-      // In development, it should not include Secure
-      expect(result).toBe("__counterscale_token=test-jwt-token; HttpOnly; Max-Age=2592000; Path=/; SameSite=Lax");
-    });
-  });
-
-  describe("clearJWTCookie", () => {
-    test("should create cookie clearing string", () => {
-      const result = clearJWTCookie();
-
-      expect(result).toBe("__counterscale_token=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax");
+    test("allows local HTTP development without Secure", () => {
+        expect(createSessionCookie("gts_secret", new Request("http://localhost"))).not.toContain("Secure");
     });
 
-    test("should include Secure flag in production", () => {
-      // We'll test this by mocking the module instead of trying to modify import.meta.env
-      // For now, let's just test the basic functionality
-      const result = clearJWTCookie();
-
-      // In development, it should not include Secure
-      expect(result).toBe("__counterscale_token=; HttpOnly; Max-Age=0; Path=/; SameSite=Lax");
+    test("clears the account session cookie", () => {
+        expect(clearSessionCookie(new Request("https://stats.example.com"))).toContain(
+            `${SESSION_COOKIE_NAME}=; HttpOnly; Max-Age=0`,
+        );
     });
-  });
+
+    test("reads only the requested cookie", () => {
+        const request = new Request("https://stats.example.com", {
+            headers: { Cookie: `other=one; ${SESSION_COOKIE_NAME}=gts_value%2Bencoded` },
+        });
+        expect(readCookie(request, SESSION_COOKIE_NAME)).toBe("gts_value+encoded");
+    });
 });

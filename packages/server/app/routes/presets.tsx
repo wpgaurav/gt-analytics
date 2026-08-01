@@ -14,7 +14,7 @@ import {
  * saving a view never navigates away from the report being looked at.
  */
 export async function action({ context, request }: ActionFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    const user = await requireAuth(request, context.cloudflare.env);
 
     const db: D1Database = context.cloudflare.env.SITES_DB;
     const form = await request.formData();
@@ -22,7 +22,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     if (intent === "delete") {
         const id = Number(form.get("id"));
-        if (Number.isFinite(id)) await deletePreset(db, id);
+        if (Number.isFinite(id)) await deletePreset(db, user.accountId!, id);
         return backToReferrer(request);
     }
 
@@ -32,7 +32,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
         // A nameless preset would render as a blank row in the sidebar.
         if (name) {
-            await createPreset(db, name, query, iconForQuery(query));
+            await createPreset(db, user.accountId!, name, query, iconForQuery(query));
         }
         return backToReferrer(request);
     }

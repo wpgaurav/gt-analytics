@@ -120,6 +120,9 @@ export default function Sidebar({ presets, siteId }: SidebarProps) {
                 <SidebarLink to="/admin/settings" icon="gear">
                     Install &amp; tracking
                 </SidebarLink>
+                <SidebarLink to="/admin/account" icon="key">
+                    Account &amp; API
+                </SidebarLink>
             </nav>
         </aside>
     );

@@ -46,8 +46,6 @@ export const meta: MetaFunction = () => {
     ];
 };
 
-const MAX_RETENTION_DAYS = 90;
-
 /**
  * Managed site ids, or an empty list if the database is unreachable.
  *
@@ -57,11 +55,12 @@ const MAX_RETENTION_DAYS = 90;
  */
 async function safeListSites(
     context: LoaderFunctionArgs["context"],
+    accountId: string,
 ): Promise<string[]> {
     try {
         const db = context.cloudflare?.env?.SITES_DB;
         if (!db) return [];
-        return (await listSites(db)).map((site) => site.site_id);
+        return (await listSites(db, accountId)).map((site) => site.site_id);
     } catch (error) {
         console.error("could not load managed sites", error);
         return [];
@@ -69,7 +68,7 @@ async function safeListSites(
 }
 
 export const loader = async ({ context, request }: LoaderFunctionArgs) => {
-    await requireAuth(request, context.cloudflare.env);
+    const user = await requireAuth(request, context.cloudflare.env);
 
     // NOTE: probably duped from getLoadContext / need to de-duplicate
     if (!context.cloudflare?.env?.CF_ACCOUNT_ID) {
@@ -82,8 +81,6 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
             status: 501,
         });
     }
-    const { analyticsEngine } = context;
-
     const url = new URL(request.url);
 
     let interval;
@@ -96,14 +93,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     // if no siteId is set, redirect to the site with the most hits
     // during the default interval (e.g. 7d)
     if (url.searchParams.has("site") === false) {
-        const sitesByHits =
-            await analyticsEngine.getSitesOrderedByHits(interval);
-        // Prefer a managed site for the default landing target; fall back to
-        // whatever Analytics Engine has seen.
-        const managed = await safeListSites(context);
-        const known = managed.length
-            ? managed
-            : sitesByHits.map(([site]: [string, number]) => site);
+        const known = await safeListSites(context, user.accountId!);
 
         // Prefer the site last looked at. Falling back to "most hits" alone
         // meant the dashboard kept opening on whichever site happened to be
@@ -120,6 +110,10 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
     const siteId = url.searchParams.get("site") || "";
     const actualSiteId = siteId === "@unknown" ? "" : siteId;
+    const managed = await safeListSites(context, user.accountId!);
+    if (actualSiteId && !managed.includes(actualSiteId)) {
+        throw new Response("Site not found", { status: 404 });
+    }
 
     const filters = getFiltersFromSearchParams(url.searchParams);
 
@@ -130,19 +124,13 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
     // traffic, a mistyped snippet, an old deployment's default -- accumulated
     // in the dropdown for 90 days with no way to remove them.
     //
-    // Analytics Engine is still consulted as a fallback, so a deployment with
-    // no sites configured yet is not left with an empty picker.
-    const sitesByHits = analyticsEngine.getSitesOrderedByHits(
-        `${MAX_RETENTION_DAYS}d`,
-    );
-
     const intervalType = getIntervalType(interval);
 
     // Base URLs come from the managed sites table, so a recorded path can be
     // turned back into a clickable link on the live site.
     let siteUrls: Record<string, string> = {};
     try {
-        siteUrls = await listSiteUrls(context.cloudflare.env.SITES_DB);
+        siteUrls = await listSiteUrls(context.cloudflare.env.SITES_DB, user.accountId!);
     } catch (err) {
         // A missing or unreachable sites database must not take the dashboard
         // down -- links simply degrade to plain text.
@@ -153,18 +141,7 @@ export const loader = async ({ context, request }: LoaderFunctionArgs) => {
 
     let out;
     try {
-        const managed = await safeListSites(context);
-
-        const fromHits = (await sitesByHits).map(
-            ([site, _]: [string, number]) => site,
-        );
-
-        // Keep the current site in the list even if it is not managed, so a
-        // link to an unmanaged site still renders a working picker.
-        const sites = managed.length ? [...managed] : fromHits;
-        if (actualSiteId && !sites.includes(actualSiteId)) {
-            sites.unshift(actualSiteId);
-        }
+        const sites = [...managed];
 
         out = {
             siteId: actualSiteId,

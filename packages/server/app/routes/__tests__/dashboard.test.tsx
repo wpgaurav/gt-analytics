@@ -35,7 +35,7 @@ describe("Dashboard route", () => {
 
     beforeEach(() => {
         fetch = global.fetch = vi.fn();
-        vi.mocked(requireAuth).mockResolvedValue({} as any);
+        vi.mocked(requireAuth).mockResolvedValue({ authenticated: true, accountId: "acct_default" });
     });
 
     afterEach(() => {
@@ -103,8 +103,10 @@ describe("Dashboard route", () => {
             );
 
             try {
+                const params = getDefaultContext();
+                (params.context.cloudflare.env as Env).SITES_DB = sitesDb(["test-siteid"]);
                 await loader({
-                    ...getDefaultContext(),
+                    ...params,
                     // @ts-expect-error we don't need to provide all the properties of the request object
                     request: {
                         url: "http://localhost:3000/dashboard", // no site query param
@@ -160,8 +162,10 @@ describe("Dashboard route", () => {
 
             vi.setSystemTime(new Date("2024-01-18T09:33:02").getTime());
 
+            const params = getDefaultContext();
+            (params.context.cloudflare.env as Env).SITES_DB = sitesDb(["test-siteid"]);
             const response = await loader({
-                ...getDefaultContext(),
+                ...params,
                 // @ts-expect-error we don't need to provide all the properties of the request object
                 request: {
                     url: "http://localhost:3000/dashboard?site=test-siteid",
@@ -550,3 +554,17 @@ describe("Dashboard route", () => {
         expect(screen.getByText("Mobile")).toBeInTheDocument();
     });
 });
+
+function sitesDb(ids: string[]): D1Database {
+    return {
+        prepare: vi.fn((sql: string) => ({
+            bind: vi.fn(() => ({
+                all: vi.fn(async () => ({
+                    results: sql.includes("base_url")
+                        ? ids.map((site_id) => ({ site_id, base_url: null }))
+                        : ids.map((site_id) => ({ site_id, account_id: "acct_default", label: site_id })),
+                })),
+            })),
+        })),
+    } as unknown as D1Database;
+}

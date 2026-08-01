@@ -1,6 +1,6 @@
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 
-import { normalizeBaseUrl, validateSiteInput } from "../sites";
+import { getSite, listSites, normalizeBaseUrl, validateSiteInput } from "../sites";
 import { formToSiteInput } from "../site-form";
 
 describe("validateSiteInput", () => {
@@ -50,6 +50,20 @@ describe("validateSiteInput", () => {
                 base_url: "javascript:alert(1)",
             }).base_url,
         ).toBeDefined();
+    });
+});
+
+describe("account site isolation", () => {
+    test("binds the account id into site list and lookup queries", async () => {
+        const bind = vi.fn(() => ({
+            all: vi.fn(async () => ({ results: [] })),
+            first: vi.fn(async () => null),
+        }));
+        const db = { prepare: vi.fn(() => ({ bind })) } as unknown as D1Database;
+        await listSites(db, "acct_one");
+        expect(bind).toHaveBeenLastCalledWith("acct_one");
+        await getSite(db, "acct_two", "example.com");
+        expect(bind).toHaveBeenLastCalledWith("acct_two", "example.com");
     });
 });
 

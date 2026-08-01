@@ -9,7 +9,7 @@ import {
 
 import SiteForm from "~/components/SiteForm";
 import { requireAuth } from "~/lib/auth";
-import { getSite, upsertSite, validateSiteInput } from "~/sites/sites";
+import { siteIdExists, upsertSite, validateSiteInput } from "~/sites/sites";
 import { formToSiteInput } from "~/sites/site-form";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
@@ -18,7 +18,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, request }: ActionFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    const user = await requireAuth(request, context.cloudflare.env);
 
     const db: D1Database = context.cloudflare.env.SITES_DB;
     const form = await request.formData();
@@ -28,7 +28,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
 
     // Creating over an existing ID would silently overwrite that site's
     // configuration, so treat it as a validation failure rather than an upsert.
-    if (!errors.site_id && (await getSite(db, input.site_id))) {
+    if (!errors.site_id && (await siteIdExists(db, input.site_id))) {
         errors.site_id = "A site with this ID already exists.";
     }
 
@@ -36,7 +36,7 @@ export async function action({ context, request }: ActionFunctionArgs) {
         return { errors, values };
     }
 
-    await upsertSite(db, input);
+    await upsertSite(db, user.accountId!, input);
     return redirect(
         `/admin/sites/${encodeURIComponent(input.site_id)}?created=1`,
     );

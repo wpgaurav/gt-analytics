@@ -6,10 +6,10 @@ import { requireAuth } from "~/lib/auth";
 import { listSites, type Site } from "~/sites/sites";
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    const user = await requireAuth(request, context.cloudflare.env);
 
     return {
-        sites: await listSites(context.cloudflare.env.SITES_DB),
+        sites: await listSites(context.cloudflare.env.SITES_DB, user.accountId!),
         origin: new URL(request.url).origin,
     };
 }

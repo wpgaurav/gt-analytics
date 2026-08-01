@@ -19,20 +19,25 @@ export const meta: MetaFunction = () => [
 ];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    const user = await requireAuth(request, context.cloudflare.env);
 
-    const sites = await listSites(context.cloudflare.env.SITES_DB);
+    const sites = await listSites(context.cloudflare.env.SITES_DB, user.accountId!);
     const url = new URL(request.url);
 
-    return {
-        sites,
-        siteId:
+    const siteId =
             url.searchParams.get("site") ||
             choosePreferredSite(
                 request,
                 sites.map((s) => s.site_id),
                 sites[0]?.site_id || "",
-            ),
+            );
+    if (siteId && !sites.some((site) => site.site_id === siteId)) {
+        throw new Response("Site not found", { status: 404 });
+    }
+
+    return {
+        sites,
+        siteId,
         configured: Boolean(context.cloudflare.env.REALTIME),
     };
 }

@@ -12,6 +12,7 @@
 
 export interface Site {
     site_id: string;
+    account_id: string;
     label: string;
     base_url: string | null;
     timezone: string;
@@ -34,21 +35,37 @@ export interface SiteInput {
     enabled?: boolean;
 }
 
-export async function listSites(db: D1Database): Promise<Site[]> {
+export async function listSites(db: D1Database, accountId: string): Promise<Site[]> {
     const { results } = await db
-        .prepare(`SELECT * FROM sites ORDER BY label COLLATE NOCASE ASC`)
+        .prepare(`SELECT * FROM sites WHERE account_id = ? ORDER BY label COLLATE NOCASE ASC`)
+        .bind(accountId)
         .all<Site>();
     return results ?? [];
 }
 
 export async function getSite(
     db: D1Database,
+    accountId: string,
     siteId: string,
 ): Promise<Site | null> {
     return await db
-        .prepare(`SELECT * FROM sites WHERE site_id = ?`)
-        .bind(siteId)
+        .prepare(`SELECT * FROM sites WHERE account_id = ? AND site_id = ?`)
+        .bind(accountId, siteId)
         .first<Site>();
+}
+
+export async function siteIdExists(db: D1Database, siteId: string): Promise<boolean> {
+    return Boolean(await db.prepare("SELECT 1 FROM sites WHERE site_id = ?").bind(siteId).first());
+}
+
+export async function accountOwnsSite(
+    db: D1Database,
+    accountId: string,
+    siteId: string,
+): Promise<boolean> {
+    return Boolean(await db.prepare(
+        "SELECT 1 FROM sites WHERE account_id = ? AND site_id = ?",
+    ).bind(accountId, siteId).first());
 }
 
 /**
@@ -77,9 +94,11 @@ export async function listSiteLiveFrom(
  */
 export async function listSiteUrls(
     db: D1Database,
+    accountId: string,
 ): Promise<Record<string, string>> {
     const { results } = await db
-        .prepare(`SELECT site_id, base_url FROM sites WHERE base_url IS NOT NULL`)
+        .prepare(`SELECT site_id, base_url FROM sites WHERE account_id = ? AND base_url IS NOT NULL`)
+        .bind(accountId)
         .all<{ site_id: string; base_url: string }>();
 
     const urls: Record<string, string> = {};
@@ -97,21 +116,24 @@ export async function listSiteUrls(
  */
 export async function upsertSite(
     db: D1Database,
+    accountId: string,
     input: SiteInput,
 ): Promise<void> {
     await db
         .prepare(
-            `INSERT INTO sites (site_id, label, base_url, timezone, enabled, updated_at)
-             VALUES (?, ?, ?, ?, ?, datetime('now'))
+            `INSERT INTO sites (site_id, account_id, label, base_url, timezone, enabled, updated_at)
+             VALUES (?, ?, ?, ?, ?, ?, datetime('now'))
              ON CONFLICT(site_id) DO UPDATE SET
                 label      = excluded.label,
                 base_url   = excluded.base_url,
                 timezone   = excluded.timezone,
                 enabled    = excluded.enabled,
-                updated_at = datetime('now')`,
+                updated_at = datetime('now')
+             WHERE sites.account_id = excluded.account_id`,
         )
         .bind(
             input.site_id,
+            accountId,
             input.label,
             normalizeBaseUrl(input.base_url),
             input.timezone || "UTC",
@@ -126,9 +148,10 @@ export async function upsertSite(
  */
 export async function deleteSite(
     db: D1Database,
+    accountId: string,
     siteId: string,
 ): Promise<void> {
-    await db.prepare(`DELETE FROM sites WHERE site_id = ?`).bind(siteId).run();
+    await db.prepare(`DELETE FROM sites WHERE account_id = ? AND site_id = ?`).bind(accountId, siteId).run();
 }
 
 /**

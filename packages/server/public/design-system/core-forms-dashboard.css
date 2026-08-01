@@ -1631,3 +1631,45 @@
     font-size: 0.9rem;
     color: var(--ink-500);
 }
+/* Account and API management */
+.setting-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-4, 1rem);
+    padding: .85rem 0;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.setting-row:last-child { border-bottom: 0; }
+
+.form-inline {
+    display: flex;
+    gap: .75rem;
+    align-items: end;
+}
+
+.form-inline .input { max-width: 24rem; }
+
+.settings-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1rem;
+    align-items: end;
+}
+
+.api-token {
+    display: block;
+    max-width: 100%;
+    padding: 1rem;
+    overflow-wrap: anywhere;
+    border: 1px solid var(--border, #e2e8f0);
+    border-radius: var(--radius-md, .5rem);
+    background: var(--surface-subtle, #f8fafc);
+}
+
+@media (max-width: 640px) {
+    .settings-grid { grid-template-columns: 1fr; }
+    .form-inline { align-items: stretch; flex-direction: column; }
+    .setting-row { align-items: flex-start; }
+}

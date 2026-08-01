@@ -9,6 +9,7 @@ import {
     Gauge,
     Globe,
     House,
+    KeyRound,
     Link as LinkIcon,
     Mail,
     Megaphone,
@@ -49,6 +50,7 @@ const ICONS = {
     "triangle-exclamation": TriangleAlert,
     house: House,
     calendar: CalendarDays,
+    key: KeyRound,
 } satisfies Record<string, LucideIcon>;
 
 export type IconName = keyof typeof ICONS;

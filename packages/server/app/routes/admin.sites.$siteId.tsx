@@ -22,10 +22,10 @@ import {
 import { formToSiteInput } from "~/sites/site-form";
 
 export async function loader({ context, params, request }: LoaderFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    const user = await requireAuth(request, context.cloudflare.env);
 
     const db: D1Database = context.cloudflare.env.SITES_DB;
-    const site = await getSite(db, params.siteId!);
+    const site = await getSite(db, user.accountId!, params.siteId!);
 
     if (!site) {
         throw new Response("Site not found", { status: 404 });
@@ -35,20 +35,20 @@ export async function loader({ context, params, request }: LoaderFunctionArgs) {
 }
 
 export async function action({ context, params, request }: ActionFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    const user = await requireAuth(request, context.cloudflare.env);
 
     const db: D1Database = context.cloudflare.env.SITES_DB;
     const siteId = params.siteId!;
     const form = await request.formData();
     const intent = String(form.get("intent") || "save");
 
-    const existing = await getSite(db, siteId);
+    const existing = await getSite(db, user.accountId!, siteId);
     if (!existing) {
         throw new Response("Site not found", { status: 404 });
     }
 
     if (intent === "delete") {
-        await deleteSite(db, siteId);
+        await deleteSite(db, user.accountId!, siteId);
         return redirect("/admin/sites");
     }
 
@@ -61,7 +61,7 @@ export async function action({ context, params, request }: ActionFunctionArgs) {
         return { errors, values };
     }
 
-    await upsertSite(db, input);
+    await upsertSite(db, user.accountId!, input);
     return { notice: "Saved." };
 }
 

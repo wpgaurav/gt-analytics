@@ -21,7 +21,7 @@ import RangePicker from "~/components/RangePicker";
 export const meta: MetaFunction = () => [{ title: "Pages — GT Analytics" }];
 
 export async function loader({ context, request }: LoaderFunctionArgs) {
-    await requireAuth(request, context.cloudflare.env);
+    const user = await requireAuth(request, context.cloudflare.env);
 
     const env = context.cloudflare.env;
     const { analyticsEngine } = context;
@@ -29,7 +29,7 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
     const interval = url.searchParams.get("interval") || "7d";
     const tz = url.searchParams.get("timezone") || "UTC";
 
-    const sites = await listSites(env.SITES_DB).catch(() => [] as Site[]);
+    const sites = await listSites(env.SITES_DB, user.accountId!).catch(() => [] as Site[]);
     const siteId =
         url.searchParams.get("site") ||
         choosePreferredSite(
@@ -37,8 +37,11 @@ export async function loader({ context, request }: LoaderFunctionArgs) {
             sites.map((s) => s.site_id),
             sites[0]?.site_id || "",
         );
+    if (siteId && !sites.some((site) => site.site_id === siteId)) {
+        throw new Response("Site not found", { status: 404 });
+    }
 
-    const siteUrls = await listSiteUrls(env.SITES_DB).catch(() => ({}));
+    const siteUrls = await listSiteUrls(env.SITES_DB, user.accountId!).catch(() => ({}));
 
     // 250 rows is well past what anyone scrolls, and keeps one query bounded.
     const pages = await analyticsEngine.getPageMetrics(

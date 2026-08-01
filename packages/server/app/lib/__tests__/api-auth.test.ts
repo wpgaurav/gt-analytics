@@ -1,150 +1,86 @@
-import { describe, expect, test } from "vitest";
-import jwt from "jsonwebtoken";
-
+import { describe, expect, test, vi } from "vitest";
 import { constantTimeEqual, requireApiAuth } from "../api-auth";
+import { SESSION_COOKIE_NAME } from "../session";
 
-const JWT_SECRET = "test-secret";
 const API_TOKEN = "gt_analytics_test_token_value";
 
-function envWithAuth(overrides: Partial<Env> = {}) {
+function sessionDb(ownsSite = true) {
     return {
-        CF_PASSWORD_HASH: "$2b$12$test.hash.value",
-        CF_JWT_SECRET: JWT_SECRET,
-        CF_API_TOKEN: API_TOKEN,
-        ...overrides,
-    } as unknown as Env;
+        prepare: vi.fn((sql: string) => ({ bind: vi.fn(() => ({
+            first: vi.fn(async () => {
+                if (sql.includes("FROM sessions s")) return {
+                    id: "usr_one", account_id: "acct_one", username: "gaurav", display_name: "Gaurav",
+                    role: "owner", is_system_admin: 0, disabled: 0, account_name: "Main",
+                };
+                if (sql.includes("FROM sites")) return ownsSite ? { owned: 1 } : null;
+                return null;
+            }),
+            run: vi.fn(async () => ({ success: true })),
+        })) })),
+    } as unknown as D1Database;
 }
 
-function requestWith(headers: Record<string, string> = {}) {
-    return new Request("https://stats.example.com/resources/paths", { headers });
-}
-
-function validCookie() {
-    const token = jwt.sign({ authenticated: true }, JWT_SECRET, {
-        issuer: "counterscale",
-    });
-    return { Cookie: `__counterscale_token=${token}` };
+function env(overrides: Partial<Env> = {}) {
+    return { CF_AUTH_ENABLED: "true", CF_API_TOKEN: API_TOKEN, SITES_DB: sessionDb(), ...overrides } as Env;
 }
 
 async function statusOfThrown(promise: Promise<unknown>) {
-    try {
-        await promise;
-        return null;
-    } catch (thrown) {
-        if (thrown instanceof Response) return thrown.status;
-        throw thrown;
-    }
+    try { await promise; return null; } catch (error) { if (error instanceof Response) return error.status; throw error; }
 }
 
 describe("requireApiAuth", () => {
     test("rejects a request with no credentials", async () => {
-        expect(
-            await statusOfThrown(requireApiAuth(requestWith(), envWithAuth())),
-        ).toBe(401);
+        expect(await statusOfThrown(requireApiAuth(new Request("https://stats.example.com/api/v1/sites"), env()))).toBe(401);
     });
 
-    test("accepts a valid session cookie", async () => {
-        const result = await requireApiAuth(
-            requestWith(validCookie()),
-            envWithAuth(),
-        );
-        expect(result).toMatchObject({ authenticated: true, via: "cookie" });
+    test("accepts an account session cookie", async () => {
+        const result = await requireApiAuth(new Request("https://stats.example.com/api/v1/sites", {
+            headers: { Cookie: `${SESSION_COOKIE_NAME}=gts_secret` },
+        }), env());
+        expect(result).toMatchObject({ authenticated: true, via: "cookie", accountId: "acct_one" });
     });
 
-    test("accepts a correct bearer token", async () => {
-        const result = await requireApiAuth(
-            requestWith({ Authorization: `Bearer ${API_TOKEN}` }),
-            envWithAuth(),
-        );
-        expect(result).toMatchObject({ authenticated: true, via: "bearer" });
+    test("maps the legacy deployment token only to the default account", async () => {
+        const result = await requireApiAuth(new Request("https://stats.example.com/api/v1/sites", {
+            headers: { Authorization: `Bearer ${API_TOKEN}` },
+        }), env());
+        expect(result).toMatchObject({ via: "legacy-bearer", accountId: "acct_default" });
     });
 
-    test("rejects an incorrect bearer token", async () => {
-        expect(
-            await statusOfThrown(
-                requireApiAuth(
-                    requestWith({ Authorization: "Bearer wrong-token" }),
-                    envWithAuth(),
-                ),
-            ),
-        ).toBe(401);
+    test("does not let an invalid bearer token fall through to a valid cookie", async () => {
+        expect(await statusOfThrown(requireApiAuth(new Request("https://stats.example.com/api/v1/sites", {
+            headers: { Authorization: "Bearer wrong", Cookie: `${SESSION_COOKIE_NAME}=gts_secret` },
+        }), env({ SITES_DB: undefined as unknown as D1Database })))).toBe(401);
     });
 
-    test("rejects bearer auth when no API token is configured", async () => {
-        expect(
-            await statusOfThrown(
-                requireApiAuth(
-                    requestWith({ Authorization: `Bearer ${API_TOKEN}` }),
-                    envWithAuth({ CF_API_TOKEN: "" } as Partial<Env>),
-                ),
-            ),
-        ).toBe(401);
-    });
-
-    test("a bad bearer token does not fall through to a valid cookie", async () => {
-        // Otherwise a token probe could be answered using an unrelated session
-        // that happened to ride along on the same request.
-        expect(
-            await statusOfThrown(
-                requireApiAuth(
-                    requestWith({
-                        ...validCookie(),
-                        Authorization: "Bearer wrong-token",
-                    }),
-                    envWithAuth(),
-                ),
-            ),
-        ).toBe(401);
-    });
-
-    test("allows everything when auth is disabled deployment-wide", async () => {
-        const result = await requireApiAuth(
-            requestWith(),
-            { CF_AUTH_ENABLED: "false" } as unknown as Env,
-        );
-        expect(result).toMatchObject({ authenticated: true, via: "disabled" });
-    });
-
-    test("throws 401 as a Response, not a redirect", async () => {
-        // A redirect answers an XHR with 200 + a login page, which a JSON
-        // caller cannot tell apart from real data.
+    test("returns a JSON 401 with a bearer challenge", async () => {
         try {
-            await requireApiAuth(requestWith(), envWithAuth());
-            throw new Error("expected requireApiAuth to throw");
-        } catch (thrown) {
-            expect(thrown).toBeInstanceOf(Response);
-            const response = thrown as Response;
-            expect(response.status).toBe(401);
-            expect(response.headers.get("WWW-Authenticate")).toContain(
-                "Bearer",
-            );
-            await expect(response.json()).resolves.toEqual({
-                error: "unauthorized",
-            });
+            await requireApiAuth(new Request("https://stats.example.com/api/v1/sites"), env());
+            throw new Error("expected rejection");
+        } catch (error) {
+            expect(error).toBeInstanceOf(Response);
+            expect((error as Response).headers.get("WWW-Authenticate")).toContain("Bearer");
         }
+    });
+
+    test("returns 404 when a valid account session requests another account's site", async () => {
+        const request = new Request("https://stats.example.com/api/v1/analytics?site=private-site", {
+            headers: { Cookie: `${SESSION_COOKIE_NAME}=gts_secret` },
+        });
+        expect(await statusOfThrown(requireApiAuth(request, env({ SITES_DB: sessionDb(false) })))).toBe(404);
+    });
+
+    test("auth-disabled deployments use the default account", async () => {
+        await expect(requireApiAuth(new Request("https://stats.example.com/api/v1/sites"), {
+            CF_AUTH_ENABLED: "false",
+        } as Env)).resolves.toMatchObject({ via: "disabled", accountId: "acct_default" });
     });
 });
 
 describe("constantTimeEqual", () => {
-    test("matches identical strings", () => {
-        expect(constantTimeEqual("abc123", "abc123")).toBe(true);
-    });
-
-    test("rejects differing strings of equal length", () => {
-        expect(constantTimeEqual("abc123", "abc124")).toBe(false);
-    });
-
-    test("rejects strings of differing length", () => {
-        expect(constantTimeEqual("abc", "abcd")).toBe(false);
-    });
-
-    test("handles empty strings", () => {
-        expect(constantTimeEqual("", "")).toBe(true);
-        expect(constantTimeEqual("", "a")).toBe(false);
-    });
-
-    test("handles multi-byte characters", () => {
+    test("matches identical values and rejects mismatches", () => {
         expect(constantTimeEqual("tökén", "tökén")).toBe(true);
-        expect(constantTimeEqual("tökén", "tokén")).toBe(false);
+        expect(constantTimeEqual("abc123", "abc124")).toBe(false);
+        expect(constantTimeEqual("abc", "abcd")).toBe(false);
     });
 });

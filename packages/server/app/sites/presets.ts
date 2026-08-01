@@ -8,6 +8,7 @@
 
 export interface Preset {
     id: number;
+    account_id: string;
     name: string;
     query: string;
     icon: string;
@@ -34,33 +35,36 @@ const ALLOWED_PARAMS = new Set([
     "utmContent",
 ]);
 
-export async function listPresets(db: D1Database): Promise<Preset[]> {
+export async function listPresets(db: D1Database, accountId: string): Promise<Preset[]> {
     const { results } = await db
-        .prepare(`SELECT * FROM presets ORDER BY position ASC, id ASC`)
+        .prepare(`SELECT * FROM presets WHERE account_id = ? ORDER BY position ASC, id ASC`)
+        .bind(accountId)
         .all<Preset>();
     return results ?? [];
 }
 
 export async function createPreset(
     db: D1Database,
+    accountId: string,
     name: string,
     query: string,
     icon = "file-lines",
 ): Promise<void> {
     await db
         .prepare(
-            `INSERT INTO presets (name, query, icon, position, built_in)
-             VALUES (?, ?, ?, (SELECT COALESCE(MAX(position), 100) + 10 FROM presets), 0)`,
+            `INSERT INTO presets (account_id, name, query, icon, position, built_in)
+             VALUES (?, ?, ?, ?, (SELECT COALESCE(MAX(position), 100) + 10 FROM presets WHERE account_id = ?), 0)`,
         )
-        .bind(name.trim().slice(0, 60), query, icon)
+        .bind(accountId, name.trim().slice(0, 60), query, icon, accountId)
         .run();
 }
 
 export async function deletePreset(
     db: D1Database,
+    accountId: string,
     id: number,
 ): Promise<void> {
-    await db.prepare(`DELETE FROM presets WHERE id = ?`).bind(id).run();
+    await db.prepare(`DELETE FROM presets WHERE account_id = ? AND id = ?`).bind(accountId, id).run();
 }
 
 /**
