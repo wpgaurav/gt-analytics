@@ -1718,14 +1718,44 @@
     align-items: end;
 }
 
-.api-token {
+.copyable-secret {
+    display: grid;
+    gap: .75rem;
+}
+
+.copyable-secret__field {
     display: block;
-    max-width: 100%;
+    width: 100%;
+    min-height: 5.5rem;
     padding: 1rem;
-    overflow-wrap: anywhere;
     border: 1px solid var(--border, #e2e8f0);
     border-radius: var(--radius-md, .5rem);
     background: var(--surface-subtle, #f8fafc);
+    color: var(--ink-900);
+    font-family: var(--font-mono, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace);
+    font-size: .85rem;
+    line-height: 1.55;
+    overflow-wrap: anywhere;
+    resize: vertical;
+}
+
+.copyable-secret__field:focus {
+    border-color: var(--brand-500);
+    outline: 3px solid color-mix(in srgb, var(--brand-500) 20%, transparent);
+    outline-offset: 1px;
+}
+
+.copyable-secret__actions {
+    display: flex;
+    align-items: center;
+    gap: .75rem;
+    flex-wrap: wrap;
+}
+
+.copyable-secret__status {
+    min-height: 1.25rem;
+    color: var(--ink-600);
+    font-size: .82rem;
 }
 
 @media (max-width: 640px) {

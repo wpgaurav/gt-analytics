@@ -23,6 +23,7 @@ import {
 } from "~/accounts/invitations";
 import { createApiKey, listApiKeys, revokeApiKey } from "~/accounts/api-keys";
 import { deletePasskey, listPasskeys } from "~/accounts/passkeys";
+import CopyableSecret from "~/components/CopyableSecret";
 import { getUserById, requireAuth } from "~/lib/auth";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
@@ -148,8 +149,8 @@ export default function AccountSettings() {
         </header>
         {result?.notice && <div className="flash flash--ok">{result.notice}</div>}
         {result?.error && <div className="flash flash--error" role="alert">{result.error}</div>}
-        {result?.token && <div className="card"><div className="card-head"><h2>New API key</h2></div><div className="card-body stack-md"><p>Copy this credential now. Only its hash is stored.</p><code className="api-token">{result.token}</code></div></div>}
-        {result?.inviteUrl && <div className="card"><div className="card-head"><h2>New invitation</h2></div><div className="card-body stack-md"><p>Send this single-use link to the account owner. It cannot be shown again.</p><code className="api-token">{result.inviteUrl}</code></div></div>}
+        {result?.token && <div className="card"><div className="card-head"><h2>New API key</h2></div><div className="card-body stack-md"><p>Copy this credential now. Only its hash is stored.</p><CopyableSecret value={result.token} label="API key" /></div></div>}
+        {result?.inviteUrl && <div className="card"><div className="card-head"><h2>New invitation</h2></div><div className="card-body stack-md"><p>Send this single-use link to the account owner. It cannot be shown again.</p><CopyableSecret value={result.inviteUrl} label="invitation link" /></div></div>}
 
         <section className="card"><div className="card-head"><h2>Account settings</h2></div><div className="card-body">
             <Form method="post" className="stack-md">
