@@ -9,10 +9,11 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         name: "GT Analytics API",
         version: "v1",
         authentication: "Authorization: Bearer gta_…",
+        scope: "Each generated API key can access exactly one site.",
         endpoints: {
             sites: `${origin}/api/v1/sites`,
-            analytics: `${origin}/api/v1/analytics?site=SITE_ID&interval=7d`,
-            realtime: `${origin}/api/v1/realtime?site=SITE_ID`,
+            analytics: `${origin}/api/v1/analytics?interval=7d`,
+            realtime: `${origin}/api/v1/realtime`,
             openapi: `${origin}/api/v1/openapi`,
         },
     });

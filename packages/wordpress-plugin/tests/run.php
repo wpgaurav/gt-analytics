@@ -29,7 +29,6 @@ function gtad_client() {
 		array(
 			'base_url' => 'https://stats.example.com',
 			'api_key'  => 'gta_prefix_secret',
-			'site_id'  => 'example.com',
 			'timezone' => 'Asia/Kolkata',
 		)
 	);
@@ -53,7 +52,7 @@ gtad_test(
 );
 
 gtad_test(
-	'requests the selected site, seven-day interval, and timezone',
+	'uses the key-bound site without sending an account-level site selector',
 	function () {
 		$url = '';
 		$GLOBALS['gtad_http_callback'] = function ( $request_url ) use ( &$url ) {
@@ -63,7 +62,7 @@ gtad_test(
 
 		gtad_client()->get_seven_day_analytics();
 		parse_str( parse_url( $url, PHP_URL_QUERY ), $query );
-		gtad_assert( 'example.com' === $query['site'], 'Site ID was not sent.' );
+		gtad_assert( ! isset( $query['site'] ), 'Site ID should come from the scoped key.' );
 		gtad_assert( '7d' === $query['interval'], 'Seven-day interval was not sent.' );
 		gtad_assert( 'Asia/Kolkata' === $query['timezone'], 'Timezone was not sent.' );
 	}
@@ -87,8 +86,12 @@ gtad_test(
 	'caches seven-day data and allows an explicit realtime refresh',
 	function () {
 		$GLOBALS['gtad_transients'] = array();
-		$calls = array( 'analytics' => 0, 'realtime' => 0 );
+		$calls = array( 'sites' => 0, 'analytics' => 0, 'realtime' => 0 );
 		$GLOBALS['gtad_http_callback'] = function ( $url ) use ( &$calls ) {
+			if ( false !== strpos( $url, '/sites' ) ) {
+				++$calls['sites'];
+				return gtad_response( array( array( 'id' => 'example.com', 'label' => 'Example' ) ) );
+			}
 			if ( false !== strpos( $url, '/analytics?' ) ) {
 				++$calls['analytics'];
 				return gtad_response( array( 'summary' => array( 'views' => 10 ) ) );
@@ -100,6 +103,7 @@ gtad_test(
 		$service = new Data_Service( gtad_client() );
 		$service->get_snapshot();
 		$service->get_snapshot();
+		gtad_assert( 1 === $calls['sites'], 'The key-bound site should be cached.' );
 		gtad_assert( 1 === $calls['analytics'], 'Seven-day data should be cached.' );
 		gtad_assert( 1 === $calls['realtime'], 'Realtime data should use its short cache.' );
 		$service->get_snapshot( true );

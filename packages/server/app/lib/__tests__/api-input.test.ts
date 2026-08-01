@@ -8,6 +8,13 @@ describe("public API input", () => {
         });
     });
 
+    test("uses the API key's bound site when the query omits site", () => {
+        expect(readApiQuery(
+            new Request("https://stats.example.com/api/v1/analytics?interval=7d"),
+            "bound.example",
+        ).site).toBe("bound.example");
+    });
+
     test("accepts bounded custom ranges", () => {
         expect(readApiQuery(new Request("https://stats.example.com/api/v1/analytics?site=example.com&interval=2026-07-01..2026-07-31"))).toMatchObject({
             interval: "2026-07-01..2026-07-31",

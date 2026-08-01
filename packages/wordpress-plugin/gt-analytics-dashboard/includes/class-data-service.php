@@ -41,18 +41,22 @@ final class Data_Service {
 	 */
 	public function get_snapshot( $force_realtime = false ) {
 		if ( ! $this->client->is_configured() ) {
-			return new \WP_Error( 'gtad_not_configured', __( 'Connect GT Analytics and select a site to display this widget.', 'gt-analytics-dashboard' ) );
+			return new \WP_Error( 'gtad_not_configured', __( 'Connect a site-scoped GT Analytics API key to display analytics.', 'gt-analytics-dashboard' ) );
 		}
 
+		$sites     = $this->get_sites();
 		$analytics = $this->remember( 'analytics', self::ANALYTICS_TTL, array( $this->client, 'get_seven_day_analytics' ) );
 		$realtime  = $this->remember( 'realtime', self::REALTIME_TTL, array( $this->client, 'get_realtime' ), $force_realtime );
+		$site      = ! is_wp_error( $sites ) && isset( $sites[0] ) && is_array( $sites[0] ) ? $sites[0] : array();
 
 		return array(
+			'site'      => $site,
 			'analytics' => is_wp_error( $analytics ) ? null : $analytics,
 			'realtime'  => is_wp_error( $realtime ) ? null : $realtime,
 			'errors'    => array_values(
 				array_filter(
 					array(
+						is_wp_error( $sites ) ? $sites->get_error_message() : null,
 						is_wp_error( $analytics ) ? $analytics->get_error_message() : null,
 						is_wp_error( $realtime ) ? $realtime->get_error_message() : null,
 					)

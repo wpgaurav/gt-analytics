@@ -12,8 +12,8 @@ const DIMENSIONS = [
 ] as const satisfies readonly ArchiveDimension[];
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
-    await requireApiAuth(request, context.cloudflare.env, "analytics:read");
-    const { site, interval, timezone, limit, filters } = readApiQuery(request);
+    const principal = await requireApiAuth(request, context.cloudflare.env, "analytics:read");
+    const { site, interval, timezone, limit, filters } = readApiQuery(request, principal.siteId);
     const env = context.cloudflare.env;
     const eventsApi = new EventsAPI(env.CF_ACCOUNT_ID, env.CF_BEARER_TOKEN, env.CF_EVENTS_DATASET || DEFAULT_EVENTS_DATASET);
 

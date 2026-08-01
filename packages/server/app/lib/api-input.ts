@@ -2,9 +2,9 @@ import { getFiltersFromSearchParams } from "./utils";
 
 const NAMED_INTERVALS = new Set(["today", "yesterday", "1d", "7d", "30d", "90d", "180d", "365d"]);
 
-export function readApiQuery(request: Request) {
+export function readApiQuery(request: Request, defaultSite = "") {
     const url = new URL(request.url);
-    const site = url.searchParams.get("site") || "";
+    const site = url.searchParams.get("site") || defaultSite;
     const interval = url.searchParams.get("interval") || "7d";
     const timezone = url.searchParams.get("timezone") || "UTC";
     const limit = Math.max(1, Math.min(100, Number(url.searchParams.get("limit")) || 20));

@@ -21,10 +21,17 @@ import {
     listAccountInvitations,
     revokeAccountInvitation,
 } from "~/accounts/invitations";
-import { createApiKey, deleteApiKey, listApiKeys, revokeApiKey } from "~/accounts/api-keys";
+import {
+    createApiKey,
+    deleteApiKey,
+    listApiKeys,
+    revokeApiKey,
+    scopeApiKeyToSite,
+} from "~/accounts/api-keys";
 import { deletePasskey, listPasskeys } from "~/accounts/passkeys";
 import CopyableSecret from "~/components/CopyableSecret";
 import { getUserById, requireAuth } from "~/lib/auth";
+import { getSite, listSites } from "~/sites/sites";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
     const user = await requireAuth(request, context.cloudflare.env);
@@ -32,6 +39,7 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
     return {
         user,
         account: await getAccount(db, user.accountId!),
+        sites: await listSites(db, user.accountId!),
         apiKeys: await listApiKeys(db, user.accountId!),
         passkeys: user.userId ? await listPasskeys(db, user.userId) : [],
         accounts: user.isSystemAdmin ? await listAccounts(db) : [],
@@ -53,8 +61,27 @@ export async function action({ request, context }: ActionFunctionArgs) {
         return { notice: "Account settings saved." };
     }
     if (intent === "create-key") {
-        const key = await createApiKey(db, user.accountId!, String(form.get("key_name") || "API key"));
-        return { notice: "API key created. Copy it now; it cannot be shown again.", token: key.token };
+        const siteId = String(form.get("site_id") || "").trim();
+        const site = await getSite(db, user.accountId!, siteId);
+        if (!site) return { error: "Select a site for this API key." };
+        const key = await createApiKey(db, user.accountId!, siteId, String(form.get("key_name") || "API key"));
+        if (!key) return { error: "The API key could not be created for that site." };
+        return {
+            notice: `API key created for ${site.label}. Copy it now; it cannot be shown again.`,
+            token: key.token,
+            tokenSite: site.label,
+        };
+    }
+    if (intent === "scope-key") {
+        const scoped = await scopeApiKeyToSite(
+            db,
+            user.accountId!,
+            String(form.get("key_id") || ""),
+            String(form.get("site_id") || ""),
+        );
+        return scoped
+            ? { notice: "API key is now restricted to the selected site." }
+            : { error: "The API key could not be assigned to that site." };
     }
     if (intent === "password" && user.userId) {
         const currentPassword = String(form.get("current_password") || "");
@@ -178,10 +205,41 @@ export default function AccountSettings() {
         </div></section>
 
         <section className="card"><div className="card-head"><h2>API keys</h2></div><div className="card-body stack-md">
-            <p className="muted">Keys can read this account&rsquo;s analytics and real-time data. Store them server-side, including in WordPress. For security, the full key is shown only once after creation; saved rows show only a non-secret prefix.</p>
-            {data.apiKeys.map((key) => <div className="setting-row" key={key.id}><div><strong>{key.name}</strong><div className="cell-sub mono">gta_{key.prefix}_… · {key.revoked_at ? "revoked" : key.last_used_at ? `used ${new Date(key.last_used_at).toLocaleDateString()}` : "never used"}</div></div><div className="setting-row__actions">{!key.revoked_at && <Form method="post"><input type="hidden" name="intent" value="revoke-key" /><input type="hidden" name="key_id" value={key.id} /><button className="btn btn-ghost btn-sm" disabled={busy}>Revoke</button></Form>}<Form method="post" onSubmit={(event) => { if (!confirm(`Permanently delete the API key “${key.name}”? This cannot be undone.`)) event.preventDefault(); }}><input type="hidden" name="intent" value="delete-key" /><input type="hidden" name="key_id" value={key.id} /><button className="btn btn-danger btn-sm" disabled={busy}>Delete</button></Form></div></div>)}
-            <Form method="post" className="form-inline"><input type="hidden" name="intent" value="create-key" /><label className="visually-hidden" htmlFor="key-name">Key name</label><input className="input" id="key-name" name="key_name" placeholder="WordPress dashboard" required /><button className="btn btn-primary" disabled={busy}>Create key</button></Form>
-            {result?.token && <div className="one-time-credential" role="region" aria-labelledby="new-api-key-heading"><div><h3 id="new-api-key-heading">New API key</h3><p>Copy this credential now. It cannot be shown again.</p></div><CopyableSecret value={result.token} label="API key" focusOnMount /></div>}
+            <p className="muted">Every key is restricted to one site and can read only that site&rsquo;s analytics and real-time data. Store keys server-side, including in WordPress. The full value is shown only once after creation.</p>
+            {data.apiKeys.map((key) => (
+                <div className="setting-row" key={key.id}>
+                    <div>
+                        <strong>{key.name}</strong>
+                        <div className="cell-sub">{key.site_id ? `Site: ${key.site_label || key.site_id}` : "No site assigned — inactive until a site is selected"}</div>
+                        <div className="cell-sub mono">gta_{key.prefix}_… · {key.revoked_at ? "revoked" : key.site_id ? key.last_used_at ? `used ${new Date(key.last_used_at).toLocaleDateString()}` : "never used" : "inactive"}</div>
+                    </div>
+                    <div className="setting-row__actions">
+                        {!key.revoked_at && !key.site_id && (
+                            <Form method="post" className="api-key-scope-form">
+                                <input type="hidden" name="intent" value="scope-key" />
+                                <input type="hidden" name="key_id" value={key.id} />
+                                <label className="visually-hidden" htmlFor={`scope-site-${key.id}`}>Site for {key.name}</label>
+                                <select className="select" id={`scope-site-${key.id}`} name="site_id" required defaultValue="">
+                                    <option value="" disabled>Select site</option>
+                                    {data.sites.map((site) => <option key={site.site_id} value={site.site_id}>{site.label}</option>)}
+                                </select>
+                                <button className="btn btn-secondary btn-sm" disabled={busy || data.sites.length === 0}>Set site</button>
+                            </Form>
+                        )}
+                        {!key.revoked_at && key.site_id && <Form method="post"><input type="hidden" name="intent" value="revoke-key" /><input type="hidden" name="key_id" value={key.id} /><button className="btn btn-ghost btn-sm" disabled={busy}>Revoke</button></Form>}
+                        <Form method="post" onSubmit={(event) => { if (!confirm(`Permanently delete the API key “${key.name}”? This cannot be undone.`)) event.preventDefault(); }}><input type="hidden" name="intent" value="delete-key" /><input type="hidden" name="key_id" value={key.id} /><button className="btn btn-danger btn-sm" disabled={busy}>Delete</button></Form>
+                    </div>
+                </div>
+            ))}
+            {data.sites.length > 0 ? (
+                <Form method="post" className="api-key-create-form">
+                    <input type="hidden" name="intent" value="create-key" />
+                    <div className="field"><label htmlFor="key-name">Key name</label><input className="input" id="key-name" name="key_name" placeholder="WordPress dashboard" required /></div>
+                    <div className="field"><label htmlFor="key-site">Site</label><select className="select" id="key-site" name="site_id" required defaultValue=""><option value="" disabled>Select site</option>{data.sites.map((site) => <option key={site.site_id} value={site.site_id}>{site.label} — {site.site_id}</option>)}</select></div>
+                    <button className="btn btn-primary" disabled={busy}>Create key</button>
+                </Form>
+            ) : <p className="field-error">Add a site before creating an API key.</p>}
+            {result?.token && <div className="one-time-credential" role="region" aria-labelledby="new-api-key-heading"><div><h3 id="new-api-key-heading">New API key</h3><p>Restricted to {result.tokenSite}. Copy this credential now; it cannot be shown again.</p></div><CopyableSecret value={result.token} label="API key" focusOnMount /></div>}
         </div></section>
 
         {data.user.isSystemAdmin && <section className="card"><div className="card-head"><h2>Accounts &amp; invitations</h2></div><div className="card-body stack-md">

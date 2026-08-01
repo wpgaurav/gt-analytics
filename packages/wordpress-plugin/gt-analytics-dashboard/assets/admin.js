@@ -1,26 +1,25 @@
 (function () {
     "use strict";
 
-    var widget = document.querySelector("#gt_analytics_dashboard_widget");
+    var roots = Array.prototype.slice.call(document.querySelectorAll("[data-gtad-root]"));
     var config = window.gtAnalyticsDashboard;
 
-    if (!widget || !config) {
+    if (!roots.length || !config) {
         return;
     }
 
-    var refreshing = false;
-
-    function refresh() {
-        if (refreshing || document.hidden) {
+    function refresh(root) {
+        if (root.dataset.refreshing === "true" || document.hidden) {
             return;
         }
 
-        refreshing = true;
-        widget.classList.add("is-refreshing");
+        root.dataset.refreshing = "true";
+        root.classList.add("is-refreshing");
 
         var body = new window.URLSearchParams();
         body.set("action", config.action);
         body.set("nonce", config.nonce);
+        body.set("view", root.dataset.gtadView || "widget");
 
         window.fetch(config.ajaxUrl, {
             method: "POST",
@@ -38,28 +37,31 @@
                 if (!response.success || !response.data || !response.data.html) {
                     throw new Error("Invalid refresh response");
                 }
-                var inside = widget.querySelector(".inside");
-                if (inside) {
-                    inside.innerHTML = response.data.html;
-                }
+                root.innerHTML = response.data.html;
             })
             .catch(function () {
-                var status = widget.querySelector("[aria-live]");
+                var status = root.querySelector("[aria-live]");
                 if (status) {
                     status.textContent = "Could not refresh. Existing data is still shown.";
                 }
             })
             .finally(function () {
-                refreshing = false;
-                widget.classList.remove("is-refreshing");
+                root.dataset.refreshing = "false";
+                root.classList.remove("is-refreshing");
             });
     }
 
-    widget.addEventListener("click", function (event) {
-        if (event.target.closest("[data-gtad-refresh]")) {
-            refresh();
-        }
+    roots.forEach(function (root) {
+        root.addEventListener("click", function (event) {
+            if (event.target.closest("[data-gtad-refresh]")) {
+                refresh(root);
+            }
+        });
     });
 
-    window.setInterval(refresh, 30000);
+    window.setInterval(function () {
+        roots.forEach(function (root) {
+            refresh(root);
+        });
+    }, 30000);
 })();

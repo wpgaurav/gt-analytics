@@ -39,19 +39,6 @@ final class API_Client {
 	}
 
 	/**
-	 * Returns the selected tracker site ID.
-	 *
-	 * @return string
-	 */
-	public function get_site_id() {
-		$value = defined( 'GT_ANALYTICS_SITE_ID' )
-			? constant( 'GT_ANALYTICS_SITE_ID' )
-			: ( isset( $this->settings['site_id'] ) ? $this->settings['site_id'] : '' );
-
-		return trim( (string) $value );
-	}
-
-	/**
 	 * Returns the report timezone.
 	 *
 	 * @return string
@@ -67,7 +54,7 @@ final class API_Client {
 	 * @return bool
 	 */
 	public function is_configured() {
-		return '' !== $this->get_api_key() && '' !== $this->get_site_id();
+		return '' !== $this->get_api_key();
 	}
 
 	/**
@@ -76,7 +63,7 @@ final class API_Client {
 	 * @return string
 	 */
 	public function get_fingerprint() {
-		return hash( 'sha256', $this->get_base_url() . '|' . $this->get_site_id() . '|' . $this->get_timezone() . '|' . $this->get_api_key() );
+		return hash( 'sha256', $this->get_base_url() . '|' . $this->get_timezone() . '|' . $this->get_api_key() );
 	}
 
 	/**
@@ -84,12 +71,13 @@ final class API_Client {
 	 *
 	 * @return string
 	 */
-	public function get_dashboard_url() {
+	public function get_dashboard_url( $site_id = '' ) {
+		$query = array( 'interval' => '7d' );
+		if ( '' !== $site_id ) {
+			$query['site'] = $site_id;
+		}
 		return add_query_arg(
-			array(
-				'site'     => $this->get_site_id(),
-				'interval' => '7d',
-			),
+			$query,
 			$this->get_base_url() . '/dashboard'
 		);
 	}
@@ -113,7 +101,6 @@ final class API_Client {
 		return $this->request(
 			'analytics',
 			array(
-				'site'     => $this->get_site_id(),
 				'interval' => '7d',
 				'timezone' => $this->get_timezone(),
 				'limit'    => 10,
@@ -127,10 +114,7 @@ final class API_Client {
 	 * @return array<string, mixed>|\WP_Error
 	 */
 	public function get_realtime() {
-		return $this->request(
-			'realtime',
-			array( 'site' => $this->get_site_id() )
-		);
+		return $this->request( 'realtime' );
 	}
 
 	/**
@@ -182,7 +166,7 @@ final class API_Client {
 			return new \WP_Error( 'gtad_unauthorized', __( 'The API key is invalid or lacks analytics and real-time read access.', 'gt-analytics-dashboard' ) );
 		}
 		if ( 404 === $status ) {
-			return new \WP_Error( 'gtad_site_not_found', __( 'The selected site is not available to this API key.', 'gt-analytics-dashboard' ) );
+			return new \WP_Error( 'gtad_site_not_found', __( 'The site assigned to this API key is unavailable.', 'gt-analytics-dashboard' ) );
 		}
 		if ( $status < 200 || $status >= 300 || ! is_array( $body ) ) {
 			return new \WP_Error( 'gtad_api_error', __( 'GT Analytics returned an unexpected response.', 'gt-analytics-dashboard' ) );

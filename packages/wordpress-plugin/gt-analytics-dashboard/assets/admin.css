@@ -246,6 +246,207 @@
     background: #fff;
 }
 
+.gtad-admin-page {
+    max-width: 1440px;
+}
+
+.gtad-admin-page__head,
+.gtad-dashboard__bar,
+.gtad-dashboard__footer,
+.gtad-dashboard__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+}
+
+.gtad-admin-page__head {
+    margin-bottom: 18px;
+}
+
+.gtad-admin-page__head h1,
+.gtad-admin-page__head p,
+.gtad-dashboard__bar strong,
+.gtad-dashboard__bar span {
+    display: block;
+    margin: 0;
+}
+
+.gtad-admin-page__head p,
+.gtad-dashboard__bar span,
+.gtad-dashboard__footer {
+    margin-top: 4px;
+    color: #646970;
+}
+
+.gtad-dashboard {
+    overflow: hidden;
+    border: 1px solid #dcdcde;
+    border-radius: 8px;
+    background: #f6f7f7;
+}
+
+.gtad-dashboard__bar,
+.gtad-dashboard__footer {
+    padding: 16px 20px;
+    background: #fff;
+}
+
+.gtad-dashboard__bar {
+    border-bottom: 1px solid #dcdcde;
+}
+
+.gtad-dashboard__actions .gtad-refresh {
+    display: inline-flex;
+    width: auto;
+    height: auto;
+    align-items: center;
+    gap: 5px;
+}
+
+.gtad-dashboard__footer {
+    border-top: 1px solid #dcdcde;
+    font-size: 12px;
+}
+
+.gtad-dashboard .gtad-inline-error {
+    margin: 16px 20px 0;
+}
+
+.gtad-kpis--page {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    margin: 20px;
+    overflow: hidden;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.gtad-kpis--page .gtad-metric {
+    border-bottom: 0;
+}
+
+.gtad-dashboard-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 16px;
+    padding: 0 20px 20px;
+}
+
+.gtad-panel {
+    min-width: 0;
+    overflow: hidden;
+    border: 1px solid #dcdcde;
+    border-radius: 6px;
+    background: #fff;
+}
+
+.gtad-panel--wide {
+    margin: 0 20px 20px;
+}
+
+.gtad-dashboard-grid .gtad-panel--wide {
+    grid-column: 1 / -1;
+    margin: 0;
+}
+
+.gtad-panel > h2,
+.gtad-panel > h3,
+.gtad-dimensions > h2 {
+    margin: 0;
+    padding: 13px 16px;
+    border-bottom: 1px solid #dcdcde;
+    font-size: 14px;
+    line-height: 1.4;
+}
+
+.gtad-dimensions > h2 {
+    margin: 0 20px 16px;
+    padding: 0;
+    border: 0;
+    font-size: 18px;
+}
+
+.gtad-panel .gtad-series {
+    height: 180px;
+}
+
+.gtad-table-wrap {
+    overflow-x: auto;
+}
+
+.gtad-table-wrap table {
+    border: 0;
+    box-shadow: none;
+}
+
+.gtad-table-wrap th:not(:first-child),
+.gtad-table-wrap td:not(:first-child) {
+    width: 110px;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.gtad-ranked-list,
+.gtad-live-feed {
+    margin: 0;
+    padding: 0 16px;
+    list-style: none;
+}
+
+.gtad-ranked-list li,
+.gtad-live-feed li {
+    display: flex;
+    min-width: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0;
+    padding: 9px 0;
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.gtad-ranked-list li:last-child,
+.gtad-live-feed li:last-child {
+    border-bottom: 0;
+}
+
+.gtad-ranked-list span,
+.gtad-live-feed span {
+    min-width: 0;
+}
+
+.gtad-ranked-list small,
+.gtad-live-feed small {
+    display: block;
+    margin-top: 2px;
+    color: #646970;
+    font-weight: 400;
+}
+
+.gtad-ranked-list strong,
+.gtad-live-feed time {
+    flex: 0 0 auto;
+    font-variant-numeric: tabular-nums;
+}
+
+.gtad-live-feed {
+    columns: 2;
+    column-gap: 32px;
+}
+
+.gtad-live-feed li {
+    break-inside: avoid;
+}
+
+.gtad-truncate {
+    display: block;
+    min-width: 0;
+    overflow: hidden;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+}
+
 @media (max-width: 782px) {
     .gtad-kpis {
         grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -263,5 +464,39 @@
 
     .gtad-widget__footer .button {
         text-align: center;
+    }
+
+    .gtad-admin-page__head,
+    .gtad-dashboard__bar,
+    .gtad-dashboard__footer {
+        align-items: stretch;
+        flex-direction: column;
+    }
+
+    .gtad-dashboard__actions {
+        flex-wrap: wrap;
+        justify-content: flex-start;
+    }
+
+    .gtad-kpis--page {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        margin: 12px;
+    }
+
+    .gtad-kpis--page .gtad-metric {
+        border-bottom: 1px solid #f0f0f1;
+    }
+
+    .gtad-dashboard-grid {
+        grid-template-columns: 1fr;
+        padding: 0 12px 12px;
+    }
+
+    .gtad-panel--wide {
+        margin: 0 12px 12px;
+    }
+
+    .gtad-live-feed {
+        columns: 1;
     }
 }

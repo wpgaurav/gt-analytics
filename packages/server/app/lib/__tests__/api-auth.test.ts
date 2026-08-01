@@ -1,8 +1,10 @@
 import { describe, expect, test, vi } from "vitest";
 import { constantTimeEqual, requireApiAuth } from "../api-auth";
+import { sha256 } from "../crypto";
 import { SESSION_COOKIE_NAME } from "../session";
 
 const API_TOKEN = "gt_analytics_test_token_value";
+const SITE_TOKEN = `gta_abcdefgh_${"a".repeat(43)}`;
 
 function sessionDb(ownsSite = true) {
     return {
@@ -15,6 +17,22 @@ function sessionDb(ownsSite = true) {
                 if (sql.includes("FROM sites")) return ownsSite ? { owned: 1 } : null;
                 return null;
             }),
+            run: vi.fn(async () => ({ success: true })),
+        })) })),
+    } as unknown as D1Database;
+}
+
+function siteKeyDb() {
+    return {
+        prepare: vi.fn((sql: string) => ({ bind: vi.fn(() => ({
+            first: vi.fn(async () => sql.includes("FROM api_keys") ? {
+                id: "key_one",
+                account_id: "acct_one",
+                site_id: "example.com",
+                token_hash: await sha256(SITE_TOKEN),
+                scopes: JSON.stringify(["analytics:read", "realtime:read"]),
+                expires_at: null,
+            } : null),
             run: vi.fn(async () => ({ success: true })),
         })) })),
     } as unknown as D1Database;
@@ -45,6 +63,20 @@ describe("requireApiAuth", () => {
             headers: { Authorization: `Bearer ${API_TOKEN}` },
         }), env());
         expect(result).toMatchObject({ via: "legacy-bearer", accountId: "acct_default" });
+    });
+
+    test("returns the site bound to a generated API key", async () => {
+        const result = await requireApiAuth(new Request("https://stats.example.com/api/v1/analytics", {
+            headers: { Authorization: `Bearer ${SITE_TOKEN}` },
+        }), env({ SITES_DB: siteKeyDb() }));
+        expect(result).toMatchObject({ via: "api-key", accountId: "acct_one", siteId: "example.com" });
+    });
+
+    test("does not let a site-scoped key request another site", async () => {
+        const request = new Request("https://stats.example.com/api/v1/analytics?site=private.example", {
+            headers: { Authorization: `Bearer ${SITE_TOKEN}` },
+        });
+        expect(await statusOfThrown(requireApiAuth(request, env({ SITES_DB: siteKeyDb() })))).toBe(404);
     });
 
     test("does not let an invalid bearer token fall through to a valid cookie", async () => {

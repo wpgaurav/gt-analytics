@@ -4,8 +4,8 @@ import { requireApiAuth } from "~/lib/api-auth";
 import { apiJson } from "~/lib/api-input";
 
 export async function loader({ request, context }: LoaderFunctionArgs) {
-    await requireApiAuth(request, context.cloudflare.env, "realtime:read");
-    const site = new URL(request.url).searchParams.get("site") || "";
+    const principal = await requireApiAuth(request, context.cloudflare.env, "realtime:read");
+    const site = new URL(request.url).searchParams.get("site") || principal.siteId || "";
     if (!site) return apiJson({ error: "invalid_request", message: "site is required" }, { status: 400 });
     if (!context.cloudflare.env.REALTIME) return apiJson({ error: "not_configured" }, { status: 501 });
     const snapshot = await readRealtimeSnapshot(context.cloudflare.env.REALTIME, site);

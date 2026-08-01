@@ -1,8 +1,8 @@
 # GT Analytics Dashboard for WordPress
 
-This package builds the installable WordPress plugin that shows a compact GT
-Analytics preview under **Dashboard > Home**. It displays real-time activity
-and the existing seven-day report, then links to the full GT Analytics website.
+This package builds the installable WordPress plugin that adds a top-level
+**GT Analytics** menu with a complete native analytics dashboard. It also keeps
+the compact preview under **Dashboard > Home**.
 
 ## Requirements
 
@@ -12,16 +12,15 @@ and the existing seven-day report, then links to the full GT Analytics website.
 
 ## Configure
 
-Activate the plugin, open **Settings > GT Analytics**, save the installation
-root and API key, then choose one of the sites returned by the key. The key is
-used only in server-side WordPress HTTP requests.
+Create a site-scoped key in GT Analytics, activate the plugin, then open
+**GT Analytics > Settings** and save the installation root and key. The site is
+derived from the key and the credential is used only in server-side requests.
 
 For production, keep credentials outside the WordPress options table:
 
 ```php
 define( 'GT_ANALYTICS_API_URL', 'https://stats.example.com' );
 define( 'GT_ANALYTICS_API_KEY', 'gta_...' );
-define( 'GT_ANALYTICS_SITE_ID', 'example.com' );
 ```
 
 The browser talks only to a capability-checked, nonce-protected WordPress AJAX

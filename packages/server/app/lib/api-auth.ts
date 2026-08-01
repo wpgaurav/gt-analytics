@@ -6,6 +6,7 @@ import { getUser, isAuthEnabled } from "./auth";
 export interface ApiPrincipal {
     authenticated: true;
     accountId: string;
+    siteId?: string;
     via: "disabled" | "legacy-bearer" | "api-key" | "cookie";
     scopes: ApiScope[];
     userId?: string;
@@ -31,6 +32,7 @@ export async function requireApiAuth(
                 principal = {
                     authenticated: true,
                     accountId: key.accountId,
+                    siteId: key.siteId,
                     via: "api-key",
                     scopes: key.scopes,
                 };
@@ -58,13 +60,20 @@ export async function requireApiAuth(
     }
 
     const siteId = new URL(request.url).searchParams.get("site");
-    if (siteId && env.SITES_DB && !(await accountOwnsSite(env.SITES_DB, principal.accountId, siteId))) {
-        throw new Response(JSON.stringify({ error: "site_not_found" }), {
-            status: 404,
-            headers: { "content-type": "application/json" },
-        });
+    if (principal.via === "api-key" && siteId && siteId !== principal.siteId) {
+        throw siteNotFound();
+    }
+    if (principal.via !== "api-key" && siteId && env.SITES_DB && !(await accountOwnsSite(env.SITES_DB, principal.accountId, siteId))) {
+        throw siteNotFound();
     }
     return principal;
+}
+
+function siteNotFound() {
+    return new Response(JSON.stringify({ error: "site_not_found" }), {
+        status: 404,
+        headers: { "content-type": "application/json" },
+    });
 }
 
 function fullAccess(accountId: string, via: ApiPrincipal["via"]): ApiPrincipal {

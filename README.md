@@ -28,8 +28,8 @@ Deployed as the Cloudflare Worker `counterscale-gauravtiwari` at `stats.gauravti
 | **Better dashboard metrics**        | Adds bounce rate, per-page engagement duration, conversion cards, grouped referrers with favicons, pagination, filters, and timezone-aware date ranges.                                                 |
 | **Long-term history**               | Archives daily Analytics Engine data to R2 as Apache Arrow, imports older data, and transparently merges archive history with the live 90-day Analytics Engine window.                                  |
 | **Passwords and passkeys**          | Supports username/password login, opaque revocable sessions, and discoverable WebAuthn passkeys with device-level user verification. Existing installs bootstrap the first `owner` from their current password. |
-| **Account-scoped read API**         | Provides versioned sites, seven-day/full analytics, real-time snapshot, and OpenAPI endpoints for WordPress, automations, third-party clients, and AI tools. API keys are hashed, revocable, and account-scoped. |
-| **WordPress dashboard plugin**      | Adds a server-side, API-key-authenticated WordPress widget for real-time and seven-day statistics, with a direct link to the full analytics website. |
+| **Site-scoped read API**            | Provides versioned site metadata, seven-day/full analytics, real-time snapshot, and OpenAPI endpoints for WordPress, automations, third-party clients, and AI tools. Each hashed, revocable API key is restricted to one site. |
+| **WordPress analytics dashboard**   | Adds a top-level WordPress admin menu with the complete real-time and seven-day dashboard, plus a compact Dashboard Home widget. The assigned site comes from the API key. |
 | **Production deployment**           | Includes GitHub Actions deployment, explicit Cloudflare bindings, migrations, scheduled archival, and a one-command installer that provisions a fresh account.                                          |
 | **Core Forms Design System**        | Rebuilds the interface with [CFDS](https://github.com/wpgaurav/core-forms-design-system), bundled open fonts, and Lucide icons. No Tailwind or shadcn dependency is required.                           |
 
@@ -143,22 +143,23 @@ hash is stored. Send the key in the server-side `Authorization` header:
 
 ```bash
 curl -H 'Authorization: Bearer gta_…' \
-  'https://stats.example.com/api/v1/analytics?site=example.com&interval=7d&timezone=UTC'
+  'https://stats.example.com/api/v1/analytics?interval=7d&timezone=UTC'
 ```
 
 | Endpoint | Purpose |
 | --- | --- |
-| `GET /api/v1/sites` | Sites owned by the key's account |
-| `GET /api/v1/analytics?site=…&interval=7d` | Summary, time series, pages and duration, referrers, events, and every supported traffic dimension |
-| `GET /api/v1/realtime?site=…` | Current active visitors, rolling views/conversions, top lists, and live feed |
+| `GET /api/v1/sites` | Metadata for the single site assigned to the key |
+| `GET /api/v1/analytics?interval=7d` | Summary, time series, pages and duration, referrers, events, and every supported traffic dimension |
+| `GET /api/v1/realtime` | Current active visitors, rolling views/conversions, top lists, and live feed |
 | `GET /api/v1/openapi` | OpenAPI 3.1 document for clients and AI tools |
 
 The default interval is seven days. `today`, `yesterday`, `1d`, `7d`, `30d`,
 `90d`, `180d`, `365d`, and bounded `YYYY-MM-DD..YYYY-MM-DD` ranges are
 accepted. Existing dashboard filters such as `path`, `channel`, `country`,
 `browserName`, `deviceType`, and UTM fields can be sent as query parameters.
-Requests for a site outside the key's account return `404` rather than
-revealing whether another account owns it.
+The site comes from the API key. A caller may include the same `site` value for
+compatibility, but requests for any other site return `404` rather than
+revealing whether it exists.
 
 ### WordPress dashboard preview
 
@@ -168,7 +169,6 @@ payloads with the WordPress HTTP API:
 
 ```php
 $base = 'https://stats.example.com/api/v1';
-$site = rawurlencode('example.com');
 $args = [
     'timeout' => 8,
     'headers' => [
@@ -177,8 +177,8 @@ $args = [
     ],
 ];
 
-$seven_days = wp_remote_get("{$base}/analytics?site={$site}&interval=7d", $args);
-$realtime   = wp_remote_get("{$base}/realtime?site={$site}", $args);
+$seven_days = wp_remote_get("{$base}/analytics?interval=7d", $args);
+$realtime   = wp_remote_get("{$base}/realtime", $args);
 ```
 
 Use those responses for a compact WordPress preview and link the widget to the
@@ -189,9 +189,10 @@ in a stable, read-only shape.
 ### Install the included WordPress plugin
 
 The installable plugin lives in [`packages/wordpress-plugin`](packages/wordpress-plugin).
-It adds **Settings > GT Analytics** and a responsive **GT Analytics** dashboard
-widget. The upstream API key remains in PHP; its 30-second browser refresh calls
-a nonce-protected WordPress AJAX action instead of calling GT Analytics directly.
+It adds a top-level **GT Analytics** menu containing the complete analytics
+dashboard and settings, plus a compact **GT Analytics** Dashboard Home widget.
+The upstream API key remains in PHP; its 30-second browser refresh calls a
+nonce-protected WordPress AJAX action instead of calling GT Analytics directly.
 
 Build the ZIP with:
 
@@ -199,9 +200,10 @@ Build the ZIP with:
 pnpm --filter @gt-analytics/wordpress-plugin build
 ```
 
-For production sites, define `GT_ANALYTICS_API_URL`, `GT_ANALYTICS_API_KEY`, and
-`GT_ANALYTICS_SITE_ID` in `wp-config.php`. The settings screen also supports
-storing them in the WordPress options table when constants are not practical.
+For production sites, define `GT_ANALYTICS_API_URL` and
+`GT_ANALYTICS_API_KEY` in `wp-config.php`. The site is determined by the key.
+The settings screen also supports storing the connection in the WordPress
+options table when constants are not practical.
 
 ## License
 

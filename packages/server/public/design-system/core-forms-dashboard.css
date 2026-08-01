@@ -1711,6 +1711,23 @@
     flex-wrap: wrap;
 }
 
+.api-key-scope-form {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+}
+
+.api-key-scope-form .select {
+    min-width: 10rem;
+}
+
+.api-key-create-form {
+    display: grid;
+    grid-template-columns: minmax(12rem, 1fr) minmax(14rem, 1fr) auto;
+    gap: .75rem;
+    align-items: end;
+}
+
 .form-inline {
     display: flex;
     gap: .75rem;
@@ -1793,4 +1810,10 @@
         flex-direction: column;
     }
     .setting-row__actions { justify-content: flex-start; }
+    .api-key-create-form { grid-template-columns: 1fr; }
+    .api-key-scope-form {
+        align-items: stretch;
+        flex-direction: column;
+        width: 100%;
+    }
 }
