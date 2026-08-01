@@ -77,7 +77,11 @@ describe("account invitations", () => {
             prepare: vi.fn((query: string) => {
                 const prepared = statement(
                     query,
-                    query.includes("SELECT * FROM account_invitations") ? invitation : null,
+                    query.includes("SELECT * FROM account_invitations")
+                        ? invitation
+                        : query.includes("SELECT u.id")
+                            ? { id: "usr_test" }
+                            : null,
                 );
                 statements.push(prepared);
                 return prepared;

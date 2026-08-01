@@ -20,10 +20,14 @@ export async function createSession(
 ): Promise<string> {
     const token = `gts_${randomSecret()}`;
     const now = Math.floor(Date.now() / 1000);
-    await db.prepare(
+    const result = await db.prepare(
         `INSERT INTO sessions (token_hash, user_id, account_id, expires_at, created_at)
          VALUES (?, ?, ?, ?, ?)`,
     ).bind(await sha256(token), userId, accountId, now + SESSION_MAX_AGE_IN_SECONDS, now).run();
+    if (!result.success) {
+        console.error("session creation failed", result);
+        throw new Error("Session could not be created");
+    }
     return token;
 }
 

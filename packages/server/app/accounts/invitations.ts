@@ -115,7 +115,7 @@ export async function acceptAccountInvitation(
     const acceptedAt = Math.floor(Date.now() / 1000);
     const passwordHash = await bcrypt.hash(input.password, 12);
 
-    await db.batch([
+    const results = await db.batch([
         db.prepare(
             `UPDATE account_invitations SET accepted_at = ?
               WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL AND expires_at > ?`,
@@ -134,6 +134,21 @@ export async function acceptAccountInvitation(
              VALUES (?, ?, ?, ?, ?, 'owner')`,
         ).bind(userId, accountId, input.username, input.displayName, passwordHash),
     ]);
+
+    if (results.some((result) => !result.success)) {
+        console.error("account invitation transaction failed", results);
+        throw new Error("The invited account could not be created.");
+    }
+
+    const created = await db.prepare(
+        `SELECT u.id FROM users u
+           JOIN accounts a ON a.id = u.account_id
+           JOIN account_invitations i ON i.account_slug = a.slug
+          WHERE u.id = ? AND a.id = ? AND i.id = ? AND i.accepted_at = ?`,
+    ).bind(userId, accountId, invitation.id, acceptedAt).first<{ id: string }>();
+    if (!created) {
+        throw new Error("The invited account could not be verified after creation.");
+    }
     return { accountId, userId };
 }
 
