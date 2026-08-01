@@ -98,7 +98,7 @@ export default function Index() {
                         <p>
                             {alreadyIn
                                 ? "Continue to the dashboard."
-                                : "Enter the dashboard password to continue."}
+                                : "Enter your username and password, or use a passkey."}
                         </p>
                     </header>
 
