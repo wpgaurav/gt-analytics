@@ -194,25 +194,93 @@
 }
 
 .gtad-series__values {
-    display: flex;
-    width: 100%;
-    justify-content: space-between;
+    position: absolute;
+    z-index: 2;
+    top: -4px;
+    left: 50%;
+    display: grid;
+    min-width: max-content;
     gap: 3px;
-    color: #2271b1;
-    font-size: 10px;
+    padding: 6px 8px;
+    border-radius: 4px;
+    background: #1d2327;
+    box-shadow: 0 2px 8px rgb(0 0 0 / 20%);
+    color: #fff;
+    font-size: 11px;
     font-variant-numeric: tabular-nums;
+    line-height: 1.35;
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -4px);
+    transition: opacity 120ms ease, transform 120ms ease, visibility 120ms ease;
+    visibility: hidden;
+    white-space: nowrap;
 }
 
-.gtad-series__values b:first-child {
-    color: #5085b5;
+.gtad-series__values span {
+    display: grid;
+    grid-template-columns: 7px 1fr auto;
+    align-items: center;
+    gap: 5px;
+}
+
+.gtad-series__values i {
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+}
+
+.gtad-series__values .is-visitors {
+    background: #72aee6;
+}
+
+.gtad-series__values .is-views {
+    background: #2271b1;
+}
+
+.gtad-series__values b {
+    margin-left: 5px;
+    color: #fff;
 }
 
 .gtad-series__day {
+    position: relative;
     display: flex;
     min-width: 0;
     flex-direction: column;
     align-items: center;
     gap: 5px;
+}
+
+.gtad-series__day:hover .gtad-series__values,
+.gtad-series__day:focus-visible .gtad-series__values {
+    opacity: 1;
+    transform: translate(-50%, 0);
+    visibility: visible;
+}
+
+.gtad-series__day:focus-visible {
+    border-radius: 3px;
+    outline: 2px solid #2271b1;
+    outline-offset: 2px;
+}
+
+.gtad-series__day:first-child .gtad-series__values {
+    left: 0;
+    transform: translate(0, -4px);
+}
+
+.gtad-series__day:first-child:hover .gtad-series__values,
+.gtad-series__day:first-child:focus-visible .gtad-series__values,
+.gtad-series__day:last-child:hover .gtad-series__values,
+.gtad-series__day:last-child:focus-visible .gtad-series__values {
+    transform: translate(0, 0);
+}
+
+.gtad-series__day:last-child .gtad-series__values {
+    right: 0;
+    left: auto;
+    transform: translate(0, -4px);
 }
 
 .gtad-series__bar {

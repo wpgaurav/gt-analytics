@@ -678,9 +678,17 @@ define( 'GT_ANALYTICS_API_KEY', 'gta_...' );</code></pre>
 				$visitors = is_array( $point ) && isset( $point['visitors'] ) ? (int) $point['visitors'] : 0;
 				$date   = is_array( $point ) && isset( $point['date'] ) ? strtotime( (string) $point['date'] ) : false;
 				$height = $max > 0 ? max( 4, (int) round( ( $views / $max ) * 100 ) ) : 0;
+				$date_label = $date ? wp_date( 'F j, Y', $date ) : __( 'Unknown date', 'gt-analytics-dashboard' );
+				$summary = sprintf(
+					/* translators: 1: Date, 2: Visitor count, 3: View count. */
+					__( '%1$s: %2$s visitors, %3$s views', 'gt-analytics-dashboard' ),
+					$date_label,
+					number_format_i18n( $visitors ),
+					number_format_i18n( $views )
+				);
 				?>
-				<div class="gtad-series__day" title="<?php echo esc_attr( sprintf( __( '%1$s visitors, %2$s views', 'gt-analytics-dashboard' ), number_format_i18n( $visitors ), number_format_i18n( $views ) ) ); ?>">
-					<span class="gtad-series__values"><b><?php echo esc_html( number_format_i18n( $visitors ) ); ?></b><b><?php echo esc_html( number_format_i18n( $views ) ); ?></b></span>
+				<div class="gtad-series__day" role="img" tabindex="0" aria-label="<?php echo esc_attr( $summary ); ?>">
+					<span class="gtad-series__values" aria-hidden="true"><span><i class="is-visitors"></i><?php esc_html_e( 'Visitors', 'gt-analytics-dashboard' ); ?> <b><?php echo esc_html( number_format_i18n( $visitors ) ); ?></b></span><span><i class="is-views"></i><?php esc_html_e( 'Views', 'gt-analytics-dashboard' ); ?> <b><?php echo esc_html( number_format_i18n( $views ) ); ?></b></span></span>
 					<span class="gtad-series__bar"><i style="--gtad-height: <?php echo esc_attr( $height ); ?>%"></i></span>
 					<small><?php echo esc_html( $date ? wp_date( count( $series ) > 7 ? 'M j' : 'D', $date ) : '—' ); ?></small>
 				</div>
