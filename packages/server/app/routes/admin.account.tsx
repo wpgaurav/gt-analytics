@@ -19,6 +19,7 @@ import {
     createAccountInvitation,
     InvitationConflictError,
     listAccountInvitations,
+    regenerateAccountInvitation,
     revokeAccountInvitation,
 } from "~/accounts/invitations";
 import {
@@ -36,6 +37,10 @@ import { getSite, listSites } from "~/sites/sites";
 export async function loader({ request, context }: LoaderFunctionArgs) {
     const user = await requireAuth(request, context.cloudflare.env);
     const db = context.cloudflare.env.SITES_DB;
+    const origin = new URL(request.url).origin;
+    const invitations = user.isSystemAdmin
+        ? await listAccountInvitations(db, context.cloudflare.env.CF_JWT_SECRET)
+        : [];
     return {
         user,
         account: await getAccount(db, user.accountId!),
@@ -43,7 +48,10 @@ export async function loader({ request, context }: LoaderFunctionArgs) {
         apiKeys: await listApiKeys(db, user.accountId!),
         passkeys: user.userId ? await listPasskeys(db, user.userId) : [],
         accounts: user.isSystemAdmin ? await listAccounts(db) : [],
-        invitations: user.isSystemAdmin ? await listAccountInvitations(db) : [],
+        invitations: invitations.map(({ token, ...invitation }) => ({
+            ...invitation,
+            inviteUrl: token ? invitationUrl(origin, token) : null,
+        })),
     };
 }
 
@@ -123,12 +131,10 @@ export async function action({ request, context }: ActionFunctionArgs) {
                 accountSlug: slug,
                 accountTimezone: timezone,
                 createdByUserId: user.userId ?? null,
-            });
-            const inviteUrl = new URL("/signup", new URL(request.url).origin);
-            inviteUrl.searchParams.set("token", created.token);
+            }, context.cloudflare.env.CF_JWT_SECRET);
             return {
                 notice: `Invitation for ${name} created. It expires in seven days.`,
-                inviteUrl: inviteUrl.toString(),
+                inviteUrl: invitationUrl(new URL(request.url).origin, created.token),
             };
         } catch (error) {
             return {
@@ -137,6 +143,20 @@ export async function action({ request, context }: ActionFunctionArgs) {
                     : "The invitation could not be created.",
             };
         }
+    }
+    if (intent === "regenerate-invitation") {
+        if (!user.isSystemAdmin) throw new Response("Forbidden", { status: 403 });
+        const token = await regenerateAccountInvitation(
+            db,
+            String(form.get("invitation_id") || ""),
+            context.cloudflare.env.CF_JWT_SECRET,
+        );
+        return token
+            ? {
+                notice: "Invitation link generated and saved.",
+                inviteUrl: invitationUrl(new URL(request.url).origin, token),
+            }
+            : { error: "That invitation is no longer active." };
     }
     if (intent === "revoke-invitation") {
         if (!user.isSystemAdmin) throw new Response("Forbidden", { status: 403 });
@@ -182,7 +202,7 @@ export default function AccountSettings() {
         </header>
         {result?.notice && <div className="flash flash--ok">{result.notice}</div>}
         {result?.error && <div className="flash flash--error" role="alert">{result.error}</div>}
-        {result?.inviteUrl && <div className="card"><div className="card-head"><h2>New invitation</h2></div><div className="card-body stack-md"><p>Send this single-use link to the account owner. It cannot be shown again.</p><CopyableSecret value={result.inviteUrl} label="invitation link" /></div></div>}
+        {result?.inviteUrl && <div className="card"><div className="card-head"><h2>Invitation link</h2></div><div className="card-body stack-md"><p>Send this single-use link to the account owner. It remains available below while the invitation is active.</p><CopyableSecret value={result.inviteUrl} label="invitation link" /></div></div>}
 
         <section className="card"><div className="card-head"><h2>Account settings</h2></div><div className="card-body">
             <Form method="post" className="stack-md">
@@ -245,7 +265,14 @@ export default function AccountSettings() {
         {data.user.isSystemAdmin && <section className="card"><div className="card-head"><h2>Accounts &amp; invitations</h2></div><div className="card-body stack-md">
             <p className="muted">New accounts are invite-only. Create a seven-day, single-use link for the owner to choose their own username and password.</p>
             {data.accounts.map((account) => <div className="setting-row" key={account.id}><div><strong>{account.name}</strong><div className="cell-sub mono">{account.slug}</div></div><span className="pill pill--muted">{account.timezone}</span></div>)}
-            {data.invitations.map((invitation) => <div className="setting-row" key={invitation.id}><div><strong>{invitation.account_name}</strong><div className="cell-sub mono">{invitation.account_slug} · {invitationStatus(invitation)}</div></div>{!invitation.accepted_at && !invitation.revoked_at && invitation.expires_at > Math.floor(Date.now() / 1000) && <Form method="post"><input type="hidden" name="intent" value="revoke-invitation" /><input type="hidden" name="invitation_id" value={invitation.id} /><button className="btn btn-ghost btn-sm">Revoke</button></Form>}</div>)}
+            {data.invitations.map((invitation) => {
+                const active = !invitation.accepted_at && !invitation.revoked_at && invitation.expires_at > Math.floor(Date.now() / 1000);
+                return <div className="invitation-item" key={invitation.id}>
+                    <div className="setting-row"><div><strong>{invitation.account_name}</strong><div className="cell-sub mono">{invitation.account_slug} · {invitationStatus(invitation)}</div></div>{active && <div className="setting-row__actions">{!invitation.inviteUrl && <Form method="post"><input type="hidden" name="intent" value="regenerate-invitation" /><input type="hidden" name="invitation_id" value={invitation.id} /><button className="btn btn-secondary btn-sm" disabled={busy}>Generate link</button></Form>}<Form method="post"><input type="hidden" name="intent" value="revoke-invitation" /><input type="hidden" name="invitation_id" value={invitation.id} /><button className="btn btn-ghost btn-sm" disabled={busy}>Revoke</button></Form></div>}</div>
+                    {active && invitation.inviteUrl && <div className="invitation-item__link"><CopyableSecret value={invitation.inviteUrl} label="invitation link" /></div>}
+                    {active && !invitation.inviteUrl && <p className="field-hint">This invitation predates persistent links. Generate a replacement link to display and copy it here.</p>}
+                </div>;
+            })}
             <Form method="post" className="settings-grid"><input type="hidden" name="intent" value="create-invitation" /><div className="field"><label htmlFor="new-account-name">Account name</label><input className="input" id="new-account-name" name="account_name" required /></div><div className="field"><label htmlFor="new-account-slug">Slug</label><input className="input" id="new-account-slug" name="slug" pattern="[a-z0-9](?:[a-z0-9-]{0,46}[a-z0-9])?" required /></div><div className="field"><label htmlFor="new-account-timezone">Timezone</label><input className="input" id="new-account-timezone" name="account_timezone" defaultValue="UTC" required /></div><div><button className="btn btn-primary" disabled={busy}>Create invitation</button></div></Form>
         </div></section>}
     </>;
@@ -253,6 +280,12 @@ export default function AccountSettings() {
 
 function validTimezone(value: string): boolean {
     try { new Intl.DateTimeFormat("en", { timeZone: value }); return true; } catch { return false; }
+}
+
+function invitationUrl(origin: string, token: string): string {
+    const url = new URL("/signup", origin);
+    url.searchParams.set("token", token);
+    return url.toString();
 }
 
 function invitationStatus(invitation: { accepted_at: number | null; revoked_at: number | null; expires_at: number }): string {

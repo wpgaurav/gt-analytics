@@ -1819,6 +1819,27 @@
     flex-wrap: wrap;
 }
 
+.invitation-item {
+    padding-block-end: 1rem;
+    border-bottom: 1px solid var(--border, #e2e8f0);
+}
+
+.invitation-item:last-of-type {
+    border-bottom: 0;
+}
+
+.invitation-item .setting-row {
+    border-bottom: 0;
+}
+
+.invitation-item__link {
+    padding-block: 0.25rem 0.5rem;
+}
+
+.invitation-item__link .copyable-secret__field {
+    min-height: 4.5rem;
+}
+
 .api-key-scope-form {
     display: flex;
     align-items: center;

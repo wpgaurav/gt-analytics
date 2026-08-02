@@ -2,6 +2,8 @@ import { describe, expect, test, vi } from "vitest";
 import {
     acceptAccountInvitation,
     createAccountInvitation,
+    listAccountInvitations,
+    regenerateAccountInvitation,
     validUsername,
 } from "../invitations";
 
@@ -17,6 +19,7 @@ interface FakeStatement {
 function statement(
     query: string,
     firstValue: unknown = null,
+    allValues: unknown[] = [],
 ): FakeStatement {
     const value: FakeStatement = {
         query,
@@ -27,7 +30,7 @@ function statement(
         },
         first: async <T>() => firstValue as T | null,
         run: async () => ({}),
-        all: async <T>() => ({ results: [] as T[] }),
+        all: async <T>() => ({ results: allValues as T[] }),
     };
     return value;
 }
@@ -49,14 +52,64 @@ describe("account invitations", () => {
             accountSlug: "example",
             accountTimezone: "Asia/Kolkata",
             createdByUserId: "usr_admin",
-        });
+        }, "test-signing-secret");
 
         const insert = statements.find((item) => item.query.includes("INSERT INTO account_invitations"));
         expect(insert).toBeDefined();
         expect(insert?.args[1]).not.toBe(created.token);
         expect(String(insert?.args[1])).not.toContain(created.token);
+        expect(created.token).toMatch(/^inv_[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/);
         expect(created.invitation.expires_at).toBeGreaterThanOrEqual(before + 7 * 24 * 60 * 60);
         expect(created.invitation.expires_at).toBeLessThanOrEqual(before + 7 * 24 * 60 * 60 + 1);
+
+        const listDb = {
+            prepare: vi.fn((query: string) => statement(query, null, [{
+                ...created.invitation,
+                token_hash: insert?.args[1],
+            }])),
+        } as unknown as D1Database;
+        const listed = await listAccountInvitations(listDb, "test-signing-secret");
+        expect(listed[0].token).toBe(created.token);
+    });
+
+    test("marks legacy invitations for regeneration and saves only the replacement hash", async () => {
+        const invitation = {
+            id: "inv_legacy",
+            account_name: "Legacy account",
+            account_slug: "legacy",
+            account_timezone: "UTC",
+            expires_at: Math.floor(Date.now() / 1000) + 3600,
+            accepted_at: null,
+            revoked_at: null,
+            created_at: Math.floor(Date.now() / 1000),
+            token_hash: "old-random-token-hash",
+        };
+        const listDb = {
+            prepare: vi.fn((query: string) => statement(query, null, [invitation])),
+        } as unknown as D1Database;
+        const listed = await listAccountInvitations(listDb, "test-signing-secret");
+        expect(listed[0].token).toBeNull();
+
+        const statements: FakeStatement[] = [];
+        const regenerateDb = {
+            prepare: vi.fn((query: string) => {
+                const prepared = statement(
+                    query,
+                    query.includes("SELECT id") ? { id: invitation.id } : null,
+                );
+                statements.push(prepared);
+                return prepared;
+            }),
+        } as unknown as D1Database;
+        const replacement = await regenerateAccountInvitation(
+            regenerateDb,
+            invitation.id,
+            "test-signing-secret",
+        );
+        const update = statements.find((item) => item.query.includes("UPDATE account_invitations"));
+        expect(replacement).toMatch(/^inv_legacy\.[A-Za-z0-9_-]+$/);
+        expect(update?.args[0]).not.toBe(replacement);
+        expect(update?.args[1]).toBe(invitation.id);
     });
 
     test("accepts a valid invite by atomically creating its account and owner", async () => {

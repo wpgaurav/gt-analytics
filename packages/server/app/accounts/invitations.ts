@@ -1,5 +1,5 @@
 import bcrypt from "bcryptjs";
-import { randomId, randomSecret, sha256 } from "~/lib/crypto";
+import { hmacSha256, randomId, sha256 } from "~/lib/crypto";
 
 const INVITATION_LIFETIME_SECONDS = 7 * 24 * 60 * 60;
 
@@ -21,7 +21,21 @@ export interface PublicInvitation {
     expiresAt: number;
 }
 
+export interface ListedAccountInvitation extends AccountInvitation {
+    /** Reconstructible only for current server-signed invitations. */
+    token: string | null;
+}
+
 export class InvitationConflictError extends Error {}
+
+async function signedInvitationToken(id: string, signingSecret: string) {
+    if (!signingSecret) throw new Error("Invitation signing is not configured.");
+    const signature = await hmacSha256(
+        signingSecret,
+        `gt-analytics-invitation:${id}`,
+    );
+    return `${id}.${signature}`;
+}
 
 export async function createAccountInvitation(
     db: D1Database,
@@ -31,6 +45,7 @@ export async function createAccountInvitation(
         accountTimezone: string;
         createdByUserId: string | null;
     },
+    signingSecret: string,
 ): Promise<{ invitation: AccountInvitation; token: string }> {
     const now = Math.floor(Date.now() / 1000);
     const conflict = await db.prepare(
@@ -44,7 +59,7 @@ export async function createAccountInvitation(
     if (conflict) throw new InvitationConflictError("That account slug already exists or has a pending invitation.");
 
     const id = randomId("inv", 12);
-    const token = randomSecret(32);
+    const token = await signedInvitationToken(id, signingSecret);
     const expiresAt = now + INVITATION_LIFETIME_SECONDS;
     await db.prepare(
         `INSERT INTO account_invitations
@@ -152,14 +167,52 @@ export async function acceptAccountInvitation(
     return { accountId, userId };
 }
 
-export async function listAccountInvitations(db: D1Database): Promise<AccountInvitation[]> {
+export async function listAccountInvitations(
+    db: D1Database,
+    signingSecret: string,
+): Promise<ListedAccountInvitation[]> {
     const { results } = await db.prepare(
         `SELECT id, account_name, account_slug, account_timezone, expires_at,
-                accepted_at, revoked_at, created_at
+                accepted_at, revoked_at, created_at, token_hash
            FROM account_invitations
           ORDER BY created_at DESC LIMIT 50`,
-    ).all<AccountInvitation>();
-    return results ?? [];
+    ).all<AccountInvitation & { token_hash: string }>();
+    const now = Math.floor(Date.now() / 1000);
+
+    return Promise.all((results ?? []).map(async ({ token_hash, ...invitation }) => {
+        const active = !invitation.accepted_at && !invitation.revoked_at && invitation.expires_at > now;
+        if (!active) return { ...invitation, token: null };
+
+        const token = await signedInvitationToken(invitation.id, signingSecret);
+        return {
+            ...invitation,
+            // Invitations created before signed links cannot be recovered from
+            // their one-way hash. The UI offers an explicit regeneration path.
+            token: await sha256(token) === token_hash ? token : null,
+        };
+    }));
+}
+
+export async function regenerateAccountInvitation(
+    db: D1Database,
+    id: string,
+    signingSecret: string,
+): Promise<string | null> {
+    const now = Math.floor(Date.now() / 1000);
+    const invitation = await db.prepare(
+        `SELECT id FROM account_invitations
+          WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL
+            AND expires_at > ?`,
+    ).bind(id, now).first<{ id: string }>();
+    if (!invitation) return null;
+
+    const token = await signedInvitationToken(invitation.id, signingSecret);
+    await db.prepare(
+        `UPDATE account_invitations SET token_hash = ?
+          WHERE id = ? AND accepted_at IS NULL AND revoked_at IS NULL
+            AND expires_at > ?`,
+    ).bind(await sha256(token), invitation.id, now).run();
+    return token;
 }
 
 export async function revokeAccountInvitation(db: D1Database, id: string): Promise<void> {
