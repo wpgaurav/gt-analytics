@@ -1,6 +1,8 @@
 # GT Analytics
 
 Self-hosted, cookieless web analytics running entirely on Cloudflare.
+<img width="1720" height="1018" alt="89582" src="https://github.com/user-attachments/assets/0fb5ee11-b222-4f83-a95f-a6533d4a39e1" />
+
 
 GT Analytics is a hard fork of
 [Counterscale](https://github.com/benvinegar/counterscale) 3.4.1. It keeps the
