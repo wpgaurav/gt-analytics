@@ -25,26 +25,20 @@ interface AnalyticsCountResult {
 }
 
 export type ViewsGroupedByInterval = [string, AnalyticsCountResult][];
-/** Given an AnalyticsCountResult object, and an object representing a row returned from
- *  CF Analytics Engine w/ counts grouped by isVisitor, accumulate view,
- *  visit, and visitor counts.
+
+/**
+ * Distinct daily visitors with a compatibility path for pre-migration rows.
+ *
+ * New rows put the site-scoped daily HMAC in both blob20 and index1. Analytics
+ * Engine can therefore keep COUNT(DISTINCT index1) accurate under sampling.
+ * Old rows have an empty blob20 and siteId in index1; remove that one sentinel
+ * from the distinct set and add their historical double1 first-hit measure.
  */
-function accumulateCountsFromRowResult(
-    counts: AnalyticsCountResult,
-    row: {
-        count: number;
-        isVisitor: number;
-        isBounce: number;
-    },
-) {
-    if (row.isVisitor == 1) {
-        counts.visitors += Number(row.count);
-    }
-    if (row.isBounce && row.isBounce != 0) {
-        // bounce is either 1 or -1
-        counts.bounces += Number(row.count) * row.isBounce;
-    }
-    counts.views += Number(row.count);
+export function distinctVisitorsSql(): string {
+    const key = ColumnMappings.visitorKey;
+    return `COUNT(DISTINCT IF(${key} != '', index1, ''))
+                - MAX(IF(${key} = '', 1, 0))
+                + SUM(IF(${key} = '', _sample_interval * ${ColumnMappings.newVisitor}, 0.0))`;
 }
 
 /** Best-effort hostname for rows recorded before blob16 existed. */
@@ -271,11 +265,7 @@ export class AnalyticsEngineAPI {
 
         const filterStr = filtersToSql(filters);
 
-        // NOTE: when using toStartOfInterval, cannot group by other columns like double1 (isVisitor).
-        //       This is just a limitation of Cloudflare Analytics Engine.
-        //       -- but you can filter on them (using WHERE)
-
-        // NOTE 2: Since CF AE doesn't support COALESCE, this query will not return
+        // Since CF AE doesn't support COALESCE, this query will not return
         //         rows (dates) where no hits were recorded -- which is why we need
         //         to generate empty buckets in JS (generateEmptyRowsOverInterval)
         //         and merge them with the results.
@@ -284,12 +274,12 @@ export class AnalyticsEngineAPI {
         const localEndTime = dayjs(endDateTime).tz(tz).utc();
 
         const query = `
-            SELECT SUM(_sample_interval) as count,
+            SELECT SUM(_sample_interval) as views,
+            ${distinctVisitorsSql()} as visitors,
+            SUM(_sample_interval * ${ColumnMappings.bounce}) as bounces,
 
             /* interval start needs local timezone, e.g. 00:00 in America/New York means start of day in NYC */
             toStartOfInterval(timestamp, INTERVAL '${intervalCount}' ${intervalType}, '${tz}') as _bucket,
-            ${ColumnMappings.newVisitor} as isVisitor,
-            ${ColumnMappings.bounce} as isBounce,
 
             /* output as UTC */
             toDateTime(_bucket, 'Etc/UTC') as bucket
@@ -298,14 +288,14 @@ export class AnalyticsEngineAPI {
 								AND timestamp < toDateTime('${localEndTime.format("YYYY-MM-DD HH:mm:ss")}')
                 AND ${ColumnMappings.siteId} = '${siteId}'
                 ${filterStr}
-            GROUP BY _bucket, isVisitor, isBounce
+            GROUP BY _bucket
             ORDER BY _bucket ASC`;
 
         type SelectionSet = {
-            count: number;
+            views: number;
+            visitors: number;
+            bounces: number;
             bucket: string;
-            isVisitor: number;
-            isBounce: number;
         };
 
         const queryResult = this.query(query);
@@ -329,14 +319,11 @@ export class AnalyticsEngineAPI {
                             const key = dayjs(utcDateTime).format(
                                 "YYYY-MM-DD HH:mm:ss",
                             );
-                            if (!Object.hasOwn(accum, key)) {
-                                accum[key] = {
-                                    views: 0,
-                                    visitors: 0,
-                                    bounces: 0,
-                                };
-                            }
-                            accumulateCountsFromRowResult(accum[key], row);
+                            accum[key] = {
+                                views: Number(row.views) || 0,
+                                visitors: Number(row.visitors) || 0,
+                                bounces: Number(row.bounces) || 0,
+                            };
 
                             return accum;
                         },
@@ -396,20 +383,19 @@ export class AnalyticsEngineAPI {
         const filterStr = filtersToSql(filters);
 
         const query = `
-            SELECT SUM(_sample_interval) as count,
-                ${ColumnMappings.newVisitor} as isVisitor,
-                ${ColumnMappings.bounce} as isBounce
+            SELECT SUM(_sample_interval) as views,
+                ${distinctVisitorsSql()} as visitors,
+                SUM(_sample_interval * ${ColumnMappings.bounce}) as bounces
             FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql} AND timestamp < ${endIntervalSql}
                 ${filterStr}
             AND ${siteIdColumn} = '${siteId}'
-            GROUP BY isVisitor, isBounce
-            ORDER BY isVisitor, isBounce ASC`;
+            `;
 
         type SelectionSet = {
-            count: number;
-            isVisitor: number;
-            isBounce: number;
+            views: number;
+            visitors: number;
+            bounces: number;
         };
 
         const queryResult = this.query(query);
@@ -426,18 +412,12 @@ export class AnalyticsEngineAPI {
                     const responseData =
                         (await response.json()) as AnalyticsQueryResult<SelectionSet>;
 
-                    const counts: AnalyticsCountResult = {
-                        views: 0,
-                        visitors: 0,
-                        bounces: 0,
-                    };
-
-                    // NOTE: note it's possible to get no results, or half results (i.e. a row where isVisit=1 but
-                    //       no row where isVisit=0), so this code makes no assumption on number of results
-                    responseData.data.forEach((row) => {
-                        accumulateCountsFromRowResult(counts, row);
+                    const row = responseData.data[0];
+                    resolve({
+                        views: Number(row?.views) || 0,
+                        visitors: Number(row?.visitors) || 0,
+                        bounces: Number(row?.bounces) || 0,
                     });
-                    resolve(counts);
                 })(),
         );
 
@@ -462,10 +442,9 @@ export class AnalyticsEngineAPI {
 
         const _column = ColumnMappings[column];
         const query = `
-            SELECT ${_column}, SUM(_sample_interval) as count
+            SELECT ${_column}, ${distinctVisitorsSql()} as count
             FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql} AND timestamp < ${endIntervalSql}
-                AND ${ColumnMappings.newVisitor} = 1
                 AND ${ColumnMappings.siteId} = '${siteId}'
                 ${filterStr}
             GROUP BY ${_column}
@@ -561,14 +540,16 @@ export class AnalyticsEngineAPI {
                 toDate(timestamp) as date,
                 ${ColumnMappings.siteId} as siteId,
                 SUM(_sample_interval) as views,
-                SUM(IF(${ColumnMappings.newVisitor} = 1, _sample_interval, 0)) as visitors,
+                SUM(IF(${ColumnMappings.visitorKey} = '', _sample_interval * ${ColumnMappings.newVisitor}, 0.0)) as visitors,
                 SUM(_sample_interval * ${ColumnMappings.bounce}) as bounces,
+                ${ColumnMappings.visitorKey} as visitorKey,
                 ${columnsStrWithAliases}
             FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql}
               AND timestamp < ${endIntervalSql}
             GROUP BY date,
                 ${ColumnMappings.siteId},
+                ${ColumnMappings.visitorKey},
                 ${columnsStr}
             ORDER BY views DESC
             LIMIT ${limit}
@@ -590,6 +571,7 @@ export class AnalyticsEngineAPI {
                 views: Number(row.views) || 0,
                 visitors: Number(row.visitors) || 0,
                 bounces: Number(row.bounces) || 0,
+                visitorKey: String(row.visitorKey ?? ""),
             };
             for (const column of columns) {
                 out[column] = String(row[column] ?? "").trim();
@@ -619,7 +601,7 @@ export class AnalyticsEngineAPI {
         const query = `
             SELECT ${_column} AS value,
                 SUM(_sample_interval) AS views,
-                SUM(_sample_interval * ${ColumnMappings.newVisitor}) AS visitors
+                ${distinctVisitorsSql()} AS visitors
             FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql} AND timestamp < ${endIntervalSql}
                 AND ${ColumnMappings.siteId} = '${siteId}'
@@ -732,10 +714,9 @@ export class AnalyticsEngineAPI {
     /**
      * Referrers grouped by source host, each carrying the exact URLs beneath.
      *
-     * One query returns both levels: grouping in SQL and nesting in JS avoids
-     * the N+1 that a per-host drill-down query would cost, and means the
-     * parent count is always the true sum of its children rather than a
-     * separately-computed number that can disagree with them.
+     * URL and host levels are queried separately because a visitor can arrive
+     * through more than one URL on the same host. Summing child visitor counts
+     * would count that person twice in the parent row.
      *
      * blob16 (referrerHost) is empty for rows recorded before attribution
      * shipped, so the host falls back to being derived from the raw URL.
@@ -754,14 +735,17 @@ export class AnalyticsEngineAPI {
             urls: { url: string; views: number; visitors: number }[];
         }[]
     > {
-        const { startIntervalSql, endIntervalSql } = intervalToSql(interval, tz);
+        const { startIntervalSql, endIntervalSql } = intervalToSql(
+            interval,
+            tz,
+        );
         const filterStr = filtersToSql(filters);
 
-        const query = `
+        const urlQuery = `
             SELECT ${ColumnMappings.referrerHost} AS host,
                    ${ColumnMappings.referrer} AS url,
                    SUM(_sample_interval) AS views,
-                   SUM(_sample_interval * ${ColumnMappings.newVisitor}) AS visitors
+                   ${distinctVisitorsSql()} AS visitors
             FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql}
               AND timestamp < ${endIntervalSql}
@@ -772,10 +756,28 @@ export class AnalyticsEngineAPI {
             LIMIT ${limit}
         `;
 
-        const response = await this.query(query);
-        if (!response.ok) return [];
+        const hostQuery = `
+            SELECT ${ColumnMappings.referrerHost} AS host,
+                   SUM(_sample_interval) AS views,
+                   ${distinctVisitorsSql()} AS visitors
+            FROM ${this.dataset}
+            WHERE timestamp >= ${startIntervalSql}
+              AND timestamp < ${endIntervalSql}
+              AND ${ColumnMappings.siteId} = '${siteId}'
+              AND ${ColumnMappings.referrerHost} != ''
+              ${filterStr}
+            GROUP BY host
+            ORDER BY views DESC
+            LIMIT ${limit}
+        `;
 
-        const body = (await response.json()) as {
+        const [urlResponse, hostResponse] = await Promise.all([
+            this.query(urlQuery),
+            this.query(hostQuery),
+        ]);
+        if (!urlResponse.ok) return [];
+
+        const body = (await urlResponse.json()) as {
             data?: {
                 host: string;
                 url: string;
@@ -783,6 +785,29 @@ export class AnalyticsEngineAPI {
                 visitors: string;
             }[];
         };
+
+        const hostTotals = new Map<
+            string,
+            { views: number; visitors: number }
+        >();
+        if (hostResponse.ok) {
+            const rows =
+                (
+                    (await hostResponse.json()) as {
+                        data?: {
+                            host: string;
+                            views: string;
+                            visitors: string;
+                        }[];
+                    }
+                ).data ?? [];
+            for (const row of rows) {
+                hostTotals.set(row.host, {
+                    views: Number(row.views) || 0,
+                    visitors: Number(row.visitors) || 0,
+                });
+            }
+        }
 
         const groups = new Map<
             string,
@@ -810,12 +835,22 @@ export class AnalyticsEngineAPI {
                 groups.set(host, group);
             }
 
-            group.views += views;
-            group.visitors += visitors;
+            // Rows with a stored host are included in the exact host-level
+            // query. Only legacy rows whose host had to be derived from the
+            // URL are additive here.
+            if (!row.host) {
+                group.views += views;
+                group.visitors += visitors;
+            }
             if (url) group.urls.push({ url, views, visitors });
         }
 
         for (const group of groups.values()) {
+            const exact = hostTotals.get(group.host);
+            if (exact) {
+                group.views += exact.views;
+                group.visitors += exact.visitors;
+            }
             group.urls.sort((a, b) => b.views - a.views);
         }
 
@@ -872,13 +907,16 @@ export class AnalyticsEngineAPI {
             bounceRate: number | null;
         }[]
     > {
-        const { startIntervalSql, endIntervalSql } = intervalToSql(interval, tz);
+        const { startIntervalSql, endIntervalSql } = intervalToSql(
+            interval,
+            tz,
+        );
         const filterStr = filtersToSql(filters);
 
         const pageQuery = `
             SELECT ${ColumnMappings.path} AS path,
                    SUM(_sample_interval) AS views,
-                   SUM(_sample_interval * ${ColumnMappings.newVisitor}) AS visitors
+                   ${distinctVisitorsSql()} AS visitors
             FROM ${this.dataset}
             WHERE timestamp >= ${startIntervalSql}
               AND timestamp < ${endIntervalSql}
@@ -909,11 +947,12 @@ export class AnalyticsEngineAPI {
 
         if (!pageResponse.ok) return [];
 
-        const pages = (
-            (await pageResponse.json()) as {
-                data?: { path: string; views: string; visitors: string }[];
-            }
-        ).data ?? [];
+        const pages =
+            (
+                (await pageResponse.json()) as {
+                    data?: { path: string; views: string; visitors: string }[];
+                }
+            ).data ?? [];
 
         const bounceByPath = new Map<
             string,
@@ -921,11 +960,16 @@ export class AnalyticsEngineAPI {
         >();
 
         if (bounceResponse.ok) {
-            const rows = (
-                (await bounceResponse.json()) as {
-                    data?: { path: string; bounces: string; entries: string }[];
-                }
-            ).data ?? [];
+            const rows =
+                (
+                    (await bounceResponse.json()) as {
+                        data?: {
+                            path: string;
+                            bounces: string;
+                            entries: string;
+                        }[];
+                    }
+                ).data ?? [];
             for (const row of rows) {
                 bounceByPath.set(row.path, {
                     bounces: Number(row.bounces) || 0,

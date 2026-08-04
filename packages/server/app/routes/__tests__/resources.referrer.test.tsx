@@ -30,8 +30,7 @@ describe("Resources/Referrer route", () => {
 
     describe("loader", () => {
         test("groups referrers by source, summing their URLs", async () => {
-            // One query now returns host + exact URL together, so the parent
-            // count is always the sum of its children.
+            // URL rows retain drill-down detail.
             fetch.mockResolvedValueOnce(
                 createFetchResponse({
                     data: [
@@ -64,6 +63,21 @@ describe("Resources/Referrer route", () => {
                     ],
                 }),
             );
+            // Host rows are counted separately so one visitor using two URLs
+            // on the same source is not counted twice in the parent.
+            fetch.mockResolvedValueOnce(
+                createFetchResponse({
+                    data: [
+                        {
+                            host: "chatgpt.com",
+                            views: "70",
+                            visitors: "20",
+                        },
+                        { host: "bing.com", views: "6", visitors: "5" },
+                        { host: "cn.bing.com", views: "1", visitors: "1" },
+                    ],
+                }),
+            );
 
             const response = await loader({
                 ...getDefaultContext(),
@@ -73,7 +87,7 @@ describe("Resources/Referrer route", () => {
                 },
             });
 
-            expect(fetch).toHaveBeenCalledTimes(1);
+            expect(fetch).toHaveBeenCalledTimes(2);
 
             const json = (await response) as {
                 groups: {
@@ -84,14 +98,11 @@ describe("Resources/Referrer route", () => {
                 }[];
             };
 
-            expect(json.groups.map((g) => g.name)).toEqual([
-                "ChatGPT",
-                "Bing",
-            ]);
+            expect(json.groups.map((g) => g.name)).toEqual(["ChatGPT", "Bing"]);
 
             const chatgpt = json.groups[0];
             expect(chatgpt.views).toBe(70);
-            expect(chatgpt.visitors).toBe(26);
+            expect(chatgpt.visitors).toBe(20);
             expect(chatgpt.urls).toHaveLength(2);
 
             const bing = json.groups[1];
@@ -122,6 +133,11 @@ describe("Resources/Referrer route", () => {
                             visitors: "1",
                         },
                     ],
+                }),
+            );
+            fetch.mockResolvedValueOnce(
+                createFetchResponse({
+                    data: [{ host: "chatgpt.com", views: "7", visitors: "2" }],
                 }),
             );
 

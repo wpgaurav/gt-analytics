@@ -9,7 +9,11 @@ import {
     beforeAll,
 } from "vitest";
 
-import { AnalyticsEngineAPI, intervalToSql } from "../query";
+import {
+    AnalyticsEngineAPI,
+    distinctVisitorsSql,
+    intervalToSql,
+} from "../query";
 
 function createFetchResponse<T>(data: T) {
     return {
@@ -36,6 +40,17 @@ describe("AnalyticsEngineAPI", () => {
     });
 
     describe("query", () => {
+        test("uses the sampling-safe daily key with a legacy fallback", () => {
+            const sql = distinctVisitorsSql();
+            expect(sql).toContain(
+                "COUNT(DISTINCT IF(blob20 != '', index1, ''))",
+            );
+            expect(sql).toContain("MAX(IF(blob20 = '', 1, 0))");
+            expect(sql).toContain(
+                "SUM(IF(blob20 = '', _sample_interval * double1, 0.0))",
+            );
+        });
+
         test("forms a valid HTTP request query for CF analytics engine", () => {
             fetch.mockResolvedValue(createFetchResponse({}));
 
@@ -64,16 +79,22 @@ describe("AnalyticsEngineAPI", () => {
                 createFetchResponse({
                     data: [
                         {
-                            count: 3,
+                            views: 3,
+                            visitors: 0,
+                            bounces: 0,
                             // note: intentionally sparse data (data for some timestamps missing)
                             bucket: "2024-01-13 05:00:00",
                         },
                         {
-                            count: 2,
+                            views: 2,
+                            visitors: 0,
+                            bounces: 0,
                             bucket: "2024-01-16 05:00:00",
                         },
                         {
-                            count: 1,
+                            views: 1,
+                            visitors: 0,
+                            bounces: 0,
                             bucket: "2024-01-17 05:00:00",
                         },
                     ],
@@ -127,22 +148,22 @@ describe("AnalyticsEngineAPI", () => {
                 createFetchResponse({
                     data: [
                         {
-                            count: 3,
-                            isVisitor: 0,
-                            isBounce: 0,
+                            views: 3,
+                            visitors: 0,
+                            bounces: 0,
                             // note: intentionally sparse data (data for some timestamps missing)
                             bucket: "2024-01-17 11:00:00",
                         },
                         {
-                            count: 2,
-                            isVisitor: 0,
-                            isBounce: 0,
+                            views: 2,
+                            visitors: 0,
+                            bounces: 0,
                             bucket: "2024-01-17 14:00:00",
                         },
                         {
-                            count: 1,
-                            isVisitor: 0,
-                            isBounce: 0,
+                            views: 1,
+                            visitors: 0,
+                            bounces: 0,
                             bucket: "2024-01-17 16:00:00",
                         },
                     ],
@@ -194,43 +215,24 @@ describe("AnalyticsEngineAPI", () => {
         test("corrects negative bounce values by moving them to previous bucket", async () => {
             const mockResponse = {
                 data: [
-                    // First bucket has 10 bounces
                     {
                         bucket: "2024-01-01 00:00:00",
-                        count: 10,
-                        isVisitor: 1,
-                        isBounce: 1,
-                    },
-                    {
-                        bucket: "2024-01-01 00:00:00",
-                        count: 2,
-                        isVisitor: 1,
-                        isBounce: -1,
+                        views: 12,
+                        visitors: 10,
+                        bounces: 8,
                     },
                     // Second bucket has -2 bounces (which should get moved to first bucket)
                     {
                         bucket: "2024-01-01 01:00:00",
-                        count: 8,
-                        isVisitor: 1,
-                        isBounce: 1,
-                    },
-                    {
-                        bucket: "2024-01-01 01:00:00",
-                        count: 10, // 8 - 10 = -2
-                        isVisitor: 1,
-                        isBounce: -1,
+                        views: 18,
+                        visitors: 8,
+                        bounces: -2,
                     },
                     {
                         bucket: "2024-01-01 02:00:00",
-                        count: 20,
-                        isVisitor: 1,
-                        isBounce: 1,
-                    },
-                    {
-                        bucket: "2024-01-01 02:00:00",
-                        count: 8,
-                        isVisitor: 1,
-                        isBounce: -1,
+                        views: 28,
+                        visitors: 20,
+                        bounces: 12,
                     },
                 ],
                 meta: { total: 3 },
@@ -262,23 +264,7 @@ describe("AnalyticsEngineAPI", () => {
         test("should return an object with view, visitor, and bounce counts", async () => {
             fetch.mockResolvedValue(
                 createFetchResponse({
-                    data: [
-                        {
-                            count: 3,
-                            isVisitor: 0,
-                            isBounce: 1,
-                        },
-                        {
-                            count: 2,
-                            isVisitor: 0,
-                            isBounce: 0,
-                        },
-                        {
-                            count: 1,
-                            isVisitor: 1,
-                            isBounce: -1,
-                        },
-                    ],
+                    data: [{ views: 6, visitors: 1, bounces: 2 }],
                 }),
             );
 
@@ -422,13 +408,9 @@ describe("AnalyticsEngineAPI", () => {
         test("quotes apostrophes in filters", async () => {
             fetch.mockResolvedValue(createFetchResponse({ data: [] }));
 
-            await api.getAllCountsByColumn(
-                "example.com",
-                "path",
-                "7d",
-                "UTC",
-                { referrer: "https://example.com/reader's-picks" },
-            );
+            await api.getAllCountsByColumn("example.com", "path", "7d", "UTC", {
+                referrer: "https://example.com/reader's-picks",
+            });
 
             const sql = String((fetch as Mock).mock.calls[0][1].body);
             expect(sql).toContain(

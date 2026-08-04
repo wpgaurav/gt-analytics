@@ -47,9 +47,7 @@ async function hit(site: RealtimeSite, body: Record<string, unknown>) {
 }
 
 async function snapshot(site: RealtimeSite) {
-    const response = await site.fetch(
-        new Request("https://realtime/snapshot"),
-    );
+    const response = await site.fetch(new Request("https://realtime/snapshot"));
     return await response.json();
 }
 
@@ -245,19 +243,38 @@ describe("visitorKey", () => {
 
     test("differs by IP, user agent, site and salt", async () => {
         const base = await visitorKey("s", request("1.2.3.4", "UA"), "salt");
-        expect(await visitorKey("s", request("9.9.9.9", "UA"), "salt")).not.toBe(base);
-        expect(await visitorKey("s", request("1.2.3.4", "Other"), "salt")).not.toBe(base);
-        expect(await visitorKey("other", request("1.2.3.4", "UA"), "salt")).not.toBe(base);
+        expect(
+            await visitorKey("s", request("9.9.9.9", "UA"), "salt"),
+        ).not.toBe(base);
+        expect(
+            await visitorKey("s", request("1.2.3.4", "Other"), "salt"),
+        ).not.toBe(base);
+        expect(
+            await visitorKey("other", request("1.2.3.4", "UA"), "salt"),
+        ).not.toBe(base);
         // A different salt must not produce the same key, or rotating it would
         // not actually break correlation.
-        expect(await visitorKey("s", request("1.2.3.4", "UA"), "other")).not.toBe(base);
+        expect(
+            await visitorKey("s", request("1.2.3.4", "UA"), "other"),
+        ).not.toBe(base);
     });
 
     test("is short and opaque", async () => {
         const key = await visitorKey("s", request("1.2.3.4", "UA"), "salt");
-        expect(key).toMatch(/^[0-9a-f]{16}$/);
+        expect(key).toMatch(/^[A-Za-z0-9_-]{43}$/);
         // The inputs must not be recoverable from it.
         expect(key).not.toContain("1.2.3.4");
+        expect(key).not.toContain("UA");
+    });
+
+    test("rotates at the UTC day boundary", async () => {
+        vi.useFakeTimers();
+        vi.setSystemTime(new Date("2026-08-04T23:59:59Z"));
+        const before = await visitorKey("s", request("1.2.3.4", "UA"), "salt");
+        vi.setSystemTime(new Date("2026-08-05T00:00:00Z"));
+        const after = await visitorKey("s", request("1.2.3.4", "UA"), "salt");
+        expect(after).not.toBe(before);
+        vi.useRealTimers();
     });
 });
 

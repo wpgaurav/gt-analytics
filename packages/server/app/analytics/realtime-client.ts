@@ -8,17 +8,20 @@
  */
 
 import type { RealtimeHit } from "../../workers/realtime";
+import { hmacSha256 } from "../lib/crypto";
 
 /**
- * Derives a pseudonymous key for "is this the same person as a moment ago".
+ * Derives a site-scoped, daily pseudonymous visitor key.
  *
- * Cookieless by construction: a SHA-256 of the site, the client IP, the user
- * agent and a salt that rotates every UTC day, truncated to 16 hex characters.
+ * Cookieless by construction: an HMAC of the UTC day, site, client IP and user
+ * agent. The secret never leaves the Worker, and neither the raw IP nor user
+ * agent can be recovered from the result. Including the site and day prevents
+ * the key from being used to correlate a visitor across sites or UTC days.
  *
- * The result exists only inside the Durable Object's five-minute window. It is
- * never written to Analytics Engine, never persisted to storage, and cannot be
- * correlated across days because the salt has rotated. It exists solely to
- * count distinct people currently on the site.
+ * The same key is used by the real-time Durable Object and as Analytics
+ * Engine's index. This lets reports count distinct daily visitors accurately,
+ * including for individual pages and other dimensions, without storing a
+ * persistent identifier.
  */
 export async function visitorKey(
     siteId: string,
@@ -32,16 +35,7 @@ export async function visitorKey(
     const ua = request.headers.get("user-agent") || "";
     const day = new Date().toISOString().slice(0, 10); // rotates daily, UTC
 
-    const material = `${salt}|${day}|${siteId}|${ip}|${ua}`;
-    const digest = await crypto.subtle.digest(
-        "SHA-256",
-        new TextEncoder().encode(material),
-    );
-
-    return [...new Uint8Array(digest)]
-        .slice(0, 8)
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
+    return hmacSha256(salt, `${day}|${siteId}|${ip}|${ua}`);
 }
 
 /** Sends a hit to the site's real-time object. Never throws. */

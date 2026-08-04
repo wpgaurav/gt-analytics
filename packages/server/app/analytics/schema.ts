@@ -47,6 +47,10 @@ export const ColumnMappings = {
     // different path -- so a per-page rate is only correct when both markers
     // are attributed to the same landing page.
     entryPath: "blob19",
+    // Site-scoped HMAC of UTC day + network/browser signals. It rotates daily,
+    // contains no raw personal data, and is also the Analytics Engine index so
+    // COUNT(DISTINCT index1) remains accurate when sampling is applied.
+    visitorKey: "blob20",
 
     /**
      * doubles

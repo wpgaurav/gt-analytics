@@ -19,7 +19,9 @@ export interface ArchiveRow {
     views: number;
     visitors: number;
     bounces: number;
-    [dimension: string]: string | number;
+    /** Daily, site-scoped HMAC. Absent on legacy/imported archive rows. */
+    visitorKey?: string;
+    [dimension: string]: string | number | undefined;
 }
 
 /**
@@ -35,8 +37,9 @@ export interface ArchiveRow {
  *   decomposed at collection time into browserName, browserVersion, deviceType
  *   and deviceModel -- all four of which are here. Keeping it would multiply
  *   every day's file for nothing the dashboard can report on.
- * - `newVisitor` and `bounce`, which are not dimensions. They are summed into
- *   the visitors and bounces measures.
+ * - `newVisitor` and `bounce`, which are not dimensions. Legacy visitor counts
+ *   and bounces are stored as measures. New visitor counts are reconstructed
+ *   by deduplicating the privacy-preserving visitorKey stored with each row.
  */
 export const ARCHIVE_DIMENSIONS = [
     "path",
@@ -133,7 +136,10 @@ export async function readArchiveRange(
     bucket: R2Bucket,
     from: string,
     to: string,
-    { concurrency = 25, maxDays = 400 }: { concurrency?: number; maxDays?: number } = {},
+    {
+        concurrency = 25,
+        maxDays = 400,
+    }: { concurrency?: number; maxDays?: number } = {},
 ): Promise<{ rows: ArchiveRow[]; daysRead: number; truncated: boolean }> {
     const allDates = datesInRange(from, to);
     const truncated = allDates.length > maxDays;
@@ -167,7 +173,10 @@ export function aggregateByDimension(
     rows: ArchiveRow[],
     { siteId, dimension, filters = {}, limit = 10 }: AggregateOptions,
 ): [string, number, number][] {
-    const totals = new Map<string, { visitors: number; views: number }>();
+    const totals = new Map<
+        string,
+        { legacyVisitors: number; visitorKeys: Set<string>; views: number }
+    >();
 
     for (const row of rows) {
         if (siteId && row.siteId !== siteId) continue;
@@ -182,8 +191,14 @@ export function aggregateByDimension(
         if (!matches) continue;
 
         const key = String(row[dimension] ?? "");
-        const existing = totals.get(key) ?? { visitors: 0, views: 0 };
-        existing.visitors += row.visitors;
+        const existing = totals.get(key) ?? {
+            legacyVisitors: 0,
+            visitorKeys: new Set<string>(),
+            views: 0,
+        };
+        const visitorKey = String(row.visitorKey ?? "");
+        if (visitorKey) existing.visitorKeys.add(visitorKey);
+        else existing.legacyVisitors += row.visitors;
         existing.views += row.views;
         totals.set(key, existing);
     }
@@ -191,7 +206,11 @@ export function aggregateByDimension(
     return [...totals.entries()]
         .map(
             ([key, counts]) =>
-                [key, counts.visitors, counts.views] as [string, number, number],
+                [
+                    key,
+                    counts.legacyVisitors + counts.visitorKeys.size,
+                    counts.views,
+                ] as [string, number, number],
         )
         .sort((a, b) => b[2] - a[2])
         .slice(0, limit);
@@ -203,12 +222,16 @@ export function totalsForSite(
     siteId: string,
 ): { views: number; visitors: number; bounces: number } {
     const totals = { views: 0, visitors: 0, bounces: 0 };
+    const visitorKeys = new Set<string>();
     for (const row of rows) {
         if (siteId && row.siteId !== siteId) continue;
         totals.views += row.views;
-        totals.visitors += row.visitors;
+        const visitorKey = String(row.visitorKey ?? "");
+        if (visitorKey) visitorKeys.add(visitorKey);
+        else totals.visitors += row.visitors;
         totals.bounces += row.bounces;
     }
+    totals.visitors += visitorKeys.size;
     return totals;
 }
 
@@ -219,24 +242,37 @@ export function seriesByDay(
 ): { date: string; views: number; visitors: number; bounces: number }[] {
     const byDate = new Map<
         string,
-        { views: number; visitors: number; bounces: number }
+        {
+            views: number;
+            legacyVisitors: number;
+            visitorKeys: Set<string>;
+            bounces: number;
+        }
     >();
 
     for (const row of rows) {
         if (siteId && row.siteId !== siteId) continue;
         const existing = byDate.get(row.date) ?? {
             views: 0,
-            visitors: 0,
+            legacyVisitors: 0,
+            visitorKeys: new Set<string>(),
             bounces: 0,
         };
         existing.views += row.views;
-        existing.visitors += row.visitors;
+        const visitorKey = String(row.visitorKey ?? "");
+        if (visitorKey) existing.visitorKeys.add(visitorKey);
+        else existing.legacyVisitors += row.visitors;
         existing.bounces += row.bounces;
         byDate.set(row.date, existing);
     }
 
     return [...byDate.entries()]
-        .map(([date, counts]) => ({ date, ...counts }))
+        .map(([date, counts]) => ({
+            date,
+            views: counts.views,
+            visitors: counts.legacyVisitors + counts.visitorKeys.size,
+            bounces: counts.bounces,
+        }))
         .sort((a, b) => a.date.localeCompare(b.date));
 }
 

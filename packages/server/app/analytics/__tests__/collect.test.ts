@@ -4,6 +4,7 @@ import type { AnalyticsEngineDataset } from "@cloudflare/workers-types";
 import httpMocks from "node-mocks-http";
 
 import { collectRequestHandler } from "../collect";
+import { visitorKey } from "../realtime-client";
 
 const defaultRequestParams = generateRequestParams({
     "user-agent":
@@ -41,8 +42,9 @@ function generateRequestParams(headers: Record<string, string>) {
 }
 
 describe("collectRequestHandler", () => {
-    test("returns 400 when siteId is missing", () => {
+    test("returns 400 when siteId is missing", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -62,13 +64,14 @@ describe("collectRequestHandler", () => {
                 ns: "1",
             }).toString();
 
-        const response = collectRequestHandler(request as any, env);
+        const response = await collectRequestHandler(request as any, env);
         expect(response.status).toBe(400);
         expect(env.WEB_COUNTER_AE.writeDataPoint).not.toHaveBeenCalled();
     });
 
-    test("returns 400 when siteId is empty string", () => {
+    test("returns 400 when siteId is empty string", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -89,13 +92,14 @@ describe("collectRequestHandler", () => {
                 ns: "1",
             }).toString();
 
-        const response = collectRequestHandler(request as any, env);
+        const response = await collectRequestHandler(request as any, env);
         expect(response.status).toBe(400);
         expect(env.WEB_COUNTER_AE.writeDataPoint).not.toHaveBeenCalled();
     });
 
-    test("acknowledges known bots without recording them", () => {
+    test("acknowledges known bots without recording them", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -105,7 +109,7 @@ describe("collectRequestHandler", () => {
                 "Mozilla/5.0 (compatible; Googlebot/2.1; +http://www.google.com/bot.html)",
         });
 
-        const response = collectRequestHandler(request as any, env);
+        const response = await collectRequestHandler(request as any, env);
 
         expect(response.status).toBe(200);
         expect(env.WEB_COUNTER_AE.writeDataPoint).not.toHaveBeenCalled();
@@ -116,8 +120,9 @@ describe("collectRequestHandler", () => {
         vi.setSystemTime(new Date("2024-01-18T09:33:02").getTime());
     });
 
-    test("invokes writeDataPoint with transformed params", () => {
+    test("invokes writeDataPoint with transformed params", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -126,12 +131,17 @@ describe("collectRequestHandler", () => {
         // @ts-expect-error - we're mocking the request object
         const request = httpMocks.createRequest(defaultRequestParams);
 
-        collectRequestHandler(request as any, env, {
+        await collectRequestHandler(request as any, env, {
             country: "US",
         });
 
         const writeDataPoint = env.WEB_COUNTER_AE.writeDataPoint;
         expect(env.WEB_COUNTER_AE.writeDataPoint).toHaveBeenCalled();
+        const expectedVisitorKey = await visitorKey(
+            "example",
+            request as any,
+            "test-secret",
+        );
 
         // verify data shows up in the right place
         expect((writeDataPoint as Mock).mock.calls[0][0]).toEqual({
@@ -155,6 +165,7 @@ describe("collectRequestHandler", () => {
                 "search", // channel, derived from that referrer
                 "", // click id: none on this request
                 "/post/123", // entry path: same page, so it defaults to the path
+                expectedVisitorKey, // privacy-preserving daily visitor key
             ],
             doubles: [
                 1, // new visitor
@@ -162,13 +173,14 @@ describe("collectRequestHandler", () => {
                 1, // new visit, so bounce
             ],
             indexes: [
-                "example", // site id is index
+                expectedVisitorKey, // daily visitor key is the sampling-safe index
             ],
         });
     });
 
-    test("if-modified-since is absent", () => {
+    test("if-modified-since is absent", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -177,7 +189,7 @@ describe("collectRequestHandler", () => {
         // @ts-expect-error - we're mocking the request object
         const request = httpMocks.createRequest(generateRequestParams({}));
 
-        collectRequestHandler(request as any, env);
+        await collectRequestHandler(request as any, env);
 
         const writeDataPoint = env.WEB_COUNTER_AE.writeDataPoint;
         expect((writeDataPoint as Mock).mock.calls[0][0]).toHaveProperty(
@@ -190,8 +202,9 @@ describe("collectRequestHandler", () => {
         );
     });
 
-    test("if-modified-since is within 30 minutes", () => {
+    test("if-modified-since is within 30 minutes", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -206,7 +219,7 @@ describe("collectRequestHandler", () => {
             }),
         );
 
-        collectRequestHandler(request as any, env);
+        await collectRequestHandler(request as any, env);
 
         const writeDataPoint = env.WEB_COUNTER_AE.writeDataPoint;
         expect((writeDataPoint as Mock).mock.calls[0][0]).toHaveProperty(
@@ -219,8 +232,9 @@ describe("collectRequestHandler", () => {
         );
     });
 
-    test("if-modified since is within 30 minutes but over day boundary", () => {
+    test("if-modified since is within 30 minutes but over day boundary", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -240,7 +254,7 @@ describe("collectRequestHandler", () => {
             }),
         );
 
-        collectRequestHandler(request as any, env);
+        await collectRequestHandler(request as any, env);
 
         const writeDataPoint = env.WEB_COUNTER_AE.writeDataPoint;
         expect((writeDataPoint as Mock).mock.calls[0][0]).toHaveProperty(
@@ -253,8 +267,9 @@ describe("collectRequestHandler", () => {
         );
     });
 
-    test("if-modified-since is over 30 days ago", () => {
+    test("if-modified-since is over 30 days ago", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -269,7 +284,7 @@ describe("collectRequestHandler", () => {
             }),
         );
 
-        collectRequestHandler(request as any, env);
+        await collectRequestHandler(request as any, env);
 
         const writeDataPoint = env.WEB_COUNTER_AE.writeDataPoint;
         expect((writeDataPoint as Mock).mock.calls[0][0]).toHaveProperty(
@@ -282,8 +297,9 @@ describe("collectRequestHandler", () => {
         );
     });
 
-    test("if-modified-since was yesterday", () => {
+    test("if-modified-since was yesterday", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -298,7 +314,7 @@ describe("collectRequestHandler", () => {
             }),
         );
 
-        collectRequestHandler(request as any, env);
+        await collectRequestHandler(request as any, env);
 
         const writeDataPoint = env.WEB_COUNTER_AE.writeDataPoint;
         expect((writeDataPoint as Mock).mock.calls[0][0]).toHaveProperty(
@@ -311,8 +327,9 @@ describe("collectRequestHandler", () => {
         );
     });
 
-    test("if-modified-since is one second after midnight", () => {
+    test("if-modified-since is one second after midnight", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -335,7 +352,7 @@ describe("collectRequestHandler", () => {
             }),
         );
 
-        collectRequestHandler(request as any, env);
+        await collectRequestHandler(request as any, env);
 
         const writeDataPoint = env.WEB_COUNTER_AE.writeDataPoint;
         expect((writeDataPoint as Mock).mock.calls[0][0]).toHaveProperty(
@@ -348,8 +365,9 @@ describe("collectRequestHandler", () => {
         );
     });
 
-    test("if-modified-since is two seconds after midnight", () => {
+    test("if-modified-since is two seconds after midnight", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -374,7 +392,7 @@ describe("collectRequestHandler", () => {
             }),
         );
 
-        collectRequestHandler(request as any, env);
+        await collectRequestHandler(request as any, env);
 
         const writeDataPoint = env.WEB_COUNTER_AE.writeDataPoint;
         expect((writeDataPoint as Mock).mock.calls[0][0]).toHaveProperty(
@@ -387,8 +405,9 @@ describe("collectRequestHandler", () => {
         );
     });
 
-    test("handles UTM parameters correctly", () => {
+    test("handles UTM parameters correctly", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -399,7 +418,7 @@ describe("collectRequestHandler", () => {
                 "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/51.0.2704.103 Safari/537.36",
         });
 
-        collectRequestHandler(request as any, env, {
+        await collectRequestHandler(request as any, env, {
             country: "US",
         });
 
@@ -414,8 +433,9 @@ describe("collectRequestHandler", () => {
         expect(blobs[14]).toBe("ad1"); // utm_content
     });
 
-    test("handles missing UTM parameters gracefully", () => {
+    test("handles missing UTM parameters gracefully", async () => {
         const env = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             } as AnalyticsEngineDataset,
@@ -433,7 +453,7 @@ describe("collectRequestHandler", () => {
             .replace(/&ut=[^&]*/, "")
             .replace(/&uco=[^&]*/, "");
 
-        collectRequestHandler(request as any, env, {
+        await collectRequestHandler(request as any, env, {
             country: "US",
         });
 

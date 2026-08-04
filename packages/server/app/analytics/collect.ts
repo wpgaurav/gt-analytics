@@ -1,9 +1,5 @@
 import type { AnalyticsEngineDataset } from "@cloudflare/workers-types";
-import {
-    classifyChannel,
-    detectClickId,
-    referrerHost,
-} from "./referrer";
+import { classifyChannel, detectClickId, referrerHost } from "./referrer";
 import { pushRealtimeHit, visitorKey } from "./realtime-client";
 import { IDevice, UAParser } from "ua-parser-js";
 import { isbot } from "isbot";
@@ -137,7 +133,7 @@ function getDeviceTypeFromDevice(device: IDevice): string {
     return device.type === undefined ? "desktop" : device.type;
 }
 
-export function collectRequestHandler(
+export async function collectRequestHandler(
     request: Request,
     env: Env,
     extra: Record<string, unknown> = {}, // extra request properties (i.e. Cloudflare properties)
@@ -222,6 +218,12 @@ export function collectRequestHandler(
         clickId: params.ci,
     });
 
+    const dailyVisitorKey = await visitorKey(
+        siteId,
+        request,
+        env.CF_REALTIME_SALT || env.CF_JWT_SECRET,
+    );
+
     const data: DataPoint = {
         siteId,
         host: params.h,
@@ -232,6 +234,7 @@ export function collectRequestHandler(
         clickId: clickId?.name || (params.ci ? params.ci : ""),
         // Absent means the session is still on the page it started on.
         entryPath: params.ep || params.p,
+        visitorKey: dailyVisitorKey,
         newVisitor: isVisit ? 1 : 0,
         newSession: 0, // dead column
         bounce: bounceValue,
@@ -263,25 +266,15 @@ export function collectRequestHandler(
     // never delay or fail the pixel.
     if (ctx && env.REALTIME) {
         ctx.waitUntil(
-            visitorKey(
+            pushRealtimeHit(env.REALTIME, {
                 siteId,
-                request,
-                env.CF_REALTIME_SALT || env.CF_JWT_SECRET || "gt-analytics",
-            )
-                .then((visitor) =>
-                    pushRealtimeHit(env.REALTIME, {
-                        siteId,
-                        visitor,
-                        path: data.path,
-                        channel: data.channel,
-                        referrerHost: data.referrerHost,
-                        country: data.country,
-                        kind: "pageview",
-                    }),
-                )
-                .catch((error) => {
-                    console.error("realtime fan-out failed", error);
-                }),
+                visitor: dailyVisitorKey,
+                path: data.path,
+                channel: data.channel,
+                referrerHost: data.referrerHost,
+                country: data.country,
+                kind: "pageview",
+            }),
         );
     }
 
@@ -342,6 +335,7 @@ interface DataPoint {
     channel?: string;
     clickId?: string;
     entryPath?: string;
+    visitorKey?: string;
 
     // doubles
     newVisitor: number;
@@ -357,7 +351,10 @@ export function writeDataPoint(
     data: DataPoint,
 ) {
     const datapoint = {
-        indexes: [data.siteId || ""], // Supply one index
+        // Analytics Engine keeps distinct counts sampling-safe only for the
+        // index. The daily, site-scoped HMAC is therefore the correct index;
+        // siteId remains in blob8 for filtering.
+        indexes: [data.visitorKey || data.siteId || ""],
         blobs: [
             data.host || "", // blob1
             data.userAgent || "", // blob2
@@ -378,6 +375,7 @@ export function writeDataPoint(
             data.channel || "", // blob17
             data.clickId || "", // blob18
             data.entryPath || "", // blob19
+            data.visitorKey || "", // blob20
         ],
         doubles: [data.newVisitor || 0, data.newSession || 0, data.bounce],
     };

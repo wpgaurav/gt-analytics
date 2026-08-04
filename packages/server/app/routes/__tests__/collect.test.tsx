@@ -11,6 +11,7 @@ describe("collect endpoint", () => {
         process.env.TZ = "EST";
         vi.clearAllMocks();
         mockEnv = {
+            CF_JWT_SECRET: "test-secret",
             WEB_COUNTER_AE: {
                 writeDataPoint: vi.fn(),
             },
